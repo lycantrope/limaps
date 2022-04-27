@@ -45,6 +45,10 @@ class Samplegroup:
         return kwargs
 
     @property
+    def is_valid(self) -> bool:
+        return any(ind.letharguslist for ind in self.fullindlist)
+
+    @property
     def interval(self) -> Optional[float]:
         if self.fullindlist is None or not self.fullindlist:
             return None
@@ -180,8 +184,8 @@ class Samplegroup:
 
         err = f"Fail to make ltmatrix, no lethargus was detected in {self.groupname}"
         if not self.numofadequatesample > 0:
-            logger.info(err)
-            return
+            logger.error(err)
+            return self
 
         if len(set(ind.interval for ind in self.fullindlist)) > 1:
             # the data is not consistent
@@ -269,46 +273,46 @@ class Samplegroup:
 
     def makealignfigure(
         self,
-        _amatrix: np.ndarray,
+        matrix: np.ndarray,
         alignhead: bool,
         representtype: str,
     ):
         fig = plt.figure(figsize=(8, 4))
         ax = fig.add_subplot(1, 1, 1)
         ax.set_ylim(-0.1, 1)
-        ax.set_xlim(0, _amatrix.shape[1])
+        ax.set_xlim(0, matrix.shape[1])
         ax.spines["right"].set_visible(False)
         ax.spines["top"].set_visible(False)
         interval = self.fullindlist[0].interval
-        hrtick = np.arange(_amatrix.shape[1] * interval / 60 / 60).astype(int)
+        hrtick = np.arange(matrix.shape[1] * interval / 60 / 60).astype(int)
         ax.set_xticks(hrtick * 60 * 60 / interval)
         ax.set_xticklabels(hrtick - 1)
         if not alignhead:
-            shift = _amatrix.shape[1] - (hrtick * 60 * 60 / interval)[-1]
+            shift = matrix.shape[1] - (hrtick * 60 * 60 / interval)[-1]
             ax.set_xticks(hrtick * 60 * 60 / interval + shift)
             ax.set_xticklabels(hrtick - max(hrtick) + 1)
-        for adata in _amatrix:
+        for adata in matrix:
             ax.plot(adata, linestyle=":", linewidth=0.5, color="gray")
 
         if representtype == "mean":
-            idx = np.sum(~np.isnan(_amatrix), axis=0) != 0
-            mean = np.full(_amatrix.shape[1], fill_value=np.nan)
-            mean[idx] = np.nanmean(_amatrix[:, idx], axis=0)
-            sd = np.full(_amatrix.shape[1], fill_value=np.nan)
-            sd[idx] = np.nanstd(_amatrix[:, idx], axis=0)
+            idx = np.sum(~np.isnan(matrix), axis=0) != 0
+            mean = np.full(matrix.shape[1], fill_value=np.nan)
+            mean[idx] = np.nanmean(matrix[:, idx], axis=0)
+            sd = np.full(matrix.shape[1], fill_value=np.nan)
+            sd[idx] = np.nanstd(matrix[:, idx], axis=0)
             ax.plot(mean + sd, linestyle="--", linewidth=1, color="gray")
             ax.plot(mean - sd, linestyle="--", linewidth=1, color="gray")
             ax.plot(mean, linestyle="-", linewidth=1, color="black")
         elif representtype == "median":
-            idx = np.sum(~np.isnan(_amatrix), axis=0) != 0
-            median = np.full(_amatrix.shape[1], fill_value=np.nan)
-            median = np.nanmedian(_amatrix, axis=0)
-            sd = np.full(_amatrix.shape[1], fill_value=np.nan)
-            sd[idx] = np.nanstd(_amatrix[:, idx], axis=0)
+            idx = np.sum(~np.isnan(matrix), axis=0) != 0
+            median = np.full(matrix.shape[1], fill_value=np.nan)
+            median = np.nanmedian(matrix, axis=0)
+            sd = np.full(matrix.shape[1], fill_value=np.nan)
+            sd[idx] = np.nanstd(matrix[:, idx], axis=0)
             ax.plot(median, linestyle="-", linewidth=1, color="black")
 
         fig.tight_layout()
-        label = f"{self.groupname} ({str(_amatrix.shape[0])})"
+        label = f"{self.groupname} ({str(matrix.shape[0])})"
         ax.annotate(
             label,
             xy=(0.01, 0.9),
@@ -605,7 +609,7 @@ class Samplegroup:
 
     def saveltmatrix(
         self,
-        _amatrix: np.ndarray,
+        matrix: np.ndarray,
         operation_typename: str,
         ordinalnum: int = 0,
     ) -> "Samplegroup":
@@ -625,7 +629,7 @@ class Samplegroup:
             )
         ).values
 
-        df = pd.DataFrame(_amatrix.T, columns=labels)
+        df = pd.DataFrame(matrix.T, columns=labels)
 
         suffix = f"_{self.interval}_{operation_typename}_df.csv"
         csvpath = self.homepath.joinpath(self.label_str + suffix)

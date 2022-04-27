@@ -89,7 +89,10 @@ class Project:
         )
         return self
 
-    def set_targetfile(self, targetfile=None) -> "Project":
+    def set_targetfile(
+        self,
+        targetfile: Optional[Union[str, Path]] = None,
+    ) -> "Project":
         if targetfile is None:
             targetfile = askdirectory()
 
@@ -134,8 +137,8 @@ interval between frame (sec): {self.interval}
     def set_groupnames(
         self, uniquegroupnames: List[str], gindex: List[Tuple[int, int]]
     ) -> "Project":
-        if not self.datapath:
-            raise Exception("Please run askdirectory before next analysis.")
+        if self.datapath is None:
+            return self.set_targetfile().set_groupnames(uniquegroupnames, gindex)
 
         if len(gindex) != len(uniquegroupnames):
             raise Exception("The sizes of uniquegroupnames and gindex are not equal")
@@ -235,6 +238,8 @@ interval between frame (sec): {self.interval}
             .saveafig(sg.makeallfigureofarea(60, sg.fullindlist), "rawareafull")
             .saveafig(sg.plot_foq_heatmap(align=False), "foq_heatmap")
             .saveafig(sg.plot_foq_heatmap(align=True), "foq_heatmap_aligned")
+            if sg.is_valid
+            else sg
         )
         return
 
@@ -431,12 +436,9 @@ interval between frame (sec): {self.interval}
         ax.set_ylim(ymin - y_margin, ymax + y_margin)
         ax.set_xlim(-0.5, len(uniquegroupnames) - 0.5)
 
-        ncount = dfs.groupby("groupname")[params].count() 
+        ncount = dfs.groupby("groupname")[params].count()
 
-        labelswithsize = [
-            f"{name}\n{num}"
-            for name, num in ncount.items()
-        ]
+        labelswithsize = [f"{name}\n{num}" for name, num in ncount.items()]
         if labels is not None and len(labels) >= dfs["groupname"].nunique():
             labelswithsize = [
                 f"{name}\n{num}"
@@ -455,7 +457,7 @@ interval between frame (sec): {self.interval}
                 outlier=outlier,
                 size=size,
                 coeff=coeff,
-                jitter_bin= 5,
+                jitter_bin=5,
             )
         )
         return fig

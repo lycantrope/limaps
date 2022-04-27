@@ -18,3 +18,8 @@ dependencies = [
 
 [project.urls]
 Home = "https://github.com/lycantrope/limaps"
+
+[project.optional-dependencies]
+hydra = [
+    "hydra-core",
+]
