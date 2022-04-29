@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import sys
@@ -390,8 +389,9 @@ interval between frame (sec): {self.interval}
 
     def to_pickle(self, compression: bool = True) -> "Project":
         suffix = ".pkl.gz" if compression else ".pkl"
-        p = self.datapath.with_suffix(suffix)
-        asyncio.run(self.__async_to_pickle(p))
+        path = self.datapath.with_suffix(suffix)
+        pd.to_pickle(self, path)
+        logging.info(f"Save project at: {path}")
         return self
 
     @classmethod
@@ -399,10 +399,6 @@ interval between frame (sec): {self.interval}
         if not Path(filepath).is_file():
             raise FileNotFoundError(filepath)
         return pd.read_pickle(filepath)
-
-    async def __async_to_pickle(self, path: Path):
-        pd.to_pickle(self, path)
-        logging.info(f"Save project at: {path}")
 
     @property
     def project_df(self) -> pd.DataFrame:
