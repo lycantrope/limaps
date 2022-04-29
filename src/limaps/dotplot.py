@@ -6,7 +6,9 @@ Created on Thu Apr 20 10:17:25 2017
 """
 
 from typing import List, Tuple
+
 import matplotlib.pyplot as plt
+import matplotlib.axes as axes
 import numpy as np
 import pandas as pd
 
@@ -16,9 +18,12 @@ def get_jitter(data, bins=10):
     # array for how far shift from the middle line
     shift_val = []
     for num in histdata[0]:
-        shift_val.extend(
+        jitter = (
             np.arange(1, num + 1, dtype=int) // 2 * np.power(-1, np.arange(num))
-            + (1 - num % 2) / 2 )
+            + (1 - num % 2) / 2
+        )
+        np.random.shuffle(jitter)
+        shift_val.extend(jitter)
     shift_arr = np.asarray(shift_val, dtype=float)
     shift_arr += (np.random.rand(len(shift_arr)) - 0.5) / 10
     shift_arr = shift_arr / shift_arr.max()
@@ -28,14 +33,14 @@ def get_jitter(data, bins=10):
 def add_jitter_plot(
     data: np.ndarray,
     *,
-    ax,
-    center_pos,
-    thickness:float = 1,
-    color:str = "black",
+    ax: axes.Axes,
+    center_pos: int,
+    thickness: float = 1,
+    color: str = "black",
     outlier: str = "oc",
-    size=1,
-    coeff=0.5,
-    jitter_bin=10,
+    size: float = 1,
+    coeff: float = 0.3,
+    jitter_bin: int = 10,
 ):
     q25, q50, q75 = np.percentile(data, [25, 50, 75])
     ax.hlines(
@@ -63,7 +68,7 @@ def add_jitter_plot(
             colors="gray",
             linewidths=thickness / 2,
         )
-    
+
     jitter = get_jitter(data, jitter_bin)
     if outlier != "oc":
         ax.scatter(
@@ -78,8 +83,8 @@ def add_jitter_plot(
         np.array(data) > upperlimit, np.array(data) < lowerlimit
     )
 
-    sizes = np.ones(len(data)) *size
-    facecolor = np.full(len(data), fill_value= color)
+    sizes = np.ones(len(data)) * size
+    facecolor = np.full(len(data), fill_value=color)
 
     sizes[outliner_mask] *= 2
     facecolor[outliner_mask] = "none"

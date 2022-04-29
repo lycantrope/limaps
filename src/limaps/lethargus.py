@@ -1,10 +1,11 @@
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Lethargus:
@@ -21,9 +22,17 @@ class Lethargus:
     fq_duration: float = field(init=False, default=np.nan)
     qfreq: float = field(init=False, default=np.nan)
 
-    qaboutdataframe: pd.DataFrame = field(init=False, repr= False, default_factory=pd.DataFrame)
-    lethargusperiodqadf: pd.DataFrame = field(init=False, repr=False, default_factory=pd.DataFrame)
-    distanceproblem: bool = field(init=False, repr= False, default = False)
+    qaboutdataframe: pd.DataFrame = field(
+        init=False,
+        repr=False,
+        default_factory=pd.DataFrame,
+    )
+    lethargusperiodqadf: pd.DataFrame = field(
+        init=False,
+        repr=False,
+        default_factory=pd.DataFrame,
+    )
+    distanceproblem: bool = field(init=False, repr=False, default=False)
 
     def calc_measurements(self, qaboolean: pd.Series) -> "Lethargus":
         # lethargus start and end
@@ -136,9 +145,9 @@ class Lethargus:
         foq: pd.Series,
         padding: float = 1,
         mode: str = "both",
-        flip:bool=False,
+        flip: bool = False,
     ) -> pd.Series:
-        modes =  ("both", "head", "tail")
+        modes = ("both", "head", "tail")
         if mode.lower() not in modes:
             raise TypeError(f"mode only support {modes}")
 
@@ -163,6 +172,6 @@ class Lethargus:
             shift = max(0, padding_size - self.start)
         padding_foq[shift : len(crop_foq) + shift] = crop_foq
         if flip:
-            return pd.Series(np.fliplr(padding_foq[:,None]).flatten())
+            return pd.Series(np.fliplr(padding_foq[:, None]).flatten())
         else:
             return pd.Series(padding_foq)

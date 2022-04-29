@@ -1,13 +1,12 @@
 import logging
-import os
-from dataclasses import MISSING, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
-from matplotlib import figure
 
+import matplotlib.axes as axes
+import matplotlib.figure as figure
 import matplotlib.patches as patch
 import matplotlib.pyplot as plt
-import matplotlib.axes as axes
 import numpy as np
 import pandas as pd
 
