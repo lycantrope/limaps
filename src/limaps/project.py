@@ -3,9 +3,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
-from functools import partial
 from pathlib import Path
-from re import I
 from typing import Any, Dict, Hashable, List, Optional, Tuple, Union
 
 import coloredlogs
@@ -13,12 +11,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from pptx import Presentation
+from pptx.util import Cm, Pt
 
 from .dotplot import add_jitter_plot
 from .samplegroup import Samplegroup
 from .utils import askdirectory
 
 plt.rcParams["figure.max_open_warning"] = 100
+
+UNDEFINE_LABEL = "unknown"
 
 
 @dataclass
@@ -28,7 +30,7 @@ class Project:
 
     colnum: int = 8
     rownum: int = 6
-    grouporder: int = "h"
+    grouporder: int = "horizontal"
 
     uniquegroupnames: List[str] = field(init=False, default_factory=list)
     groups: pd.MultiIndex = field(init=False, default=None)
@@ -44,6 +46,7 @@ class Project:
     data: pd.DataFrame = field(init=False)
 
     samplegroups: List[Samplegroup] = field(init=False, default_factory=list)
+
     # internal value
     _summary: pd.DataFrame = field(init=False, repr=False, default=None)
 
@@ -51,7 +54,7 @@ class Project:
         kws["datapath"] = Path(kws.get("datapath"))
         kws["homepath"] = Path(kws.get("homepath"))
         self.__dict__.update(kws)
-        groups = kws["groups"][0]
+        groups = kws["groups"]
         sgs = {sg.groupname: sg for sg in kws["samplegroups"]}
         datas = sorted(
             (
@@ -93,13 +96,12 @@ class Project:
         self,
         targetfile: Optional[Union[str, Path]] = None,
     ) -> "Project":
-        if targetfile is None:
-            targetfile = askdirectory()
+
+        targetfile = targetfile or askdirectory()
+        if targetfile is None or not Path(targetfile).is_file():
+            raise FileNotFoundError(f"File is not selected or not exist: {targetfile}")
 
         self.datapath = Path(targetfile)
-        if not self.datapath.is_file():
-            raise FileNotFoundError(self.datapath)
-
         self.homepath = self.datapath.parent
         header = self.datapath.stem.split("_")
         if len(header) != 4:
@@ -151,9 +153,13 @@ interval between frame (sec): {self.interval}
         indexgrid = np.arange(self.colnum * self.rownum, dtype=int).reshape(
             self.rownum, self.colnum
         )
+        sample_nums = self.rownum
         if self.grouporder.lower() in ("h", "horizontal"):
             indexgrid = np.fliplr(indexgrid.T)
+            sample_nums = self.colnum
         groups = []
+        remains = set(range(sample_nums))
+
         for idx, name in zip(gindex, uniquegroupnames):
             if isinstance(idx, int):
                 ilist = [idx - 1]
@@ -163,13 +169,25 @@ interval between frame (sec): {self.interval}
                 else:
                     start, end = idx
                     ilist = list(range(start - 1, end))
+            remains -= set(ilist)
             groups.extend(
                 [
                     (name, i + 1, col)
                     for i, col in enumerate(indexgrid[ilist, :].ravel())
                 ]
             )
-        group_grid = [["" for _ in range(self.colnum)] for _ in range(self.rownum)]
+
+        if remains:
+            ilist = sorted(remains)
+            groups.extend(
+                [
+                    (UNDEFINE_LABEL, i + 1, col)
+                    for i, col in enumerate(indexgrid[ilist, :].ravel())
+                ]
+            )
+            logging.warn(f"{ilist} are assigned as `unknown` group")
+
+        group_grid = [["-" for _ in range(self.colnum)] for _ in range(self.rownum)]
         width = 0
         for name, i, num in groups:
             width = max(width, len(name))
@@ -183,7 +201,7 @@ interval between frame (sec): {self.interval}
 
         self.groups: Tuple[pd.MultiIndex, np.ndarray] = pd.MultiIndex.from_tuples(
             groups
-        ).sortlevel(2)
+        ).sortlevel(2)[0]
         return self
 
     def read_dataframe(self) -> "Project":
@@ -203,16 +221,18 @@ interval between frame (sec): {self.interval}
         self.data = df[[col for col in df.columns if "area" in col.lower()]].astype(
             np.int16
         )
-        self.data.columns = self.groups[0]
+        self.data.columns = self.groups
         return self
 
     def batch_foreach_samplegroup(self, df: pd.DataFrame):
+        groupname = df.columns.get_level_values(0)[0]
         sg = (
             Samplegroup(
                 self.date,
-                df.columns.get_level_values(0)[0],
+                groupname,
                 self.expnum,
                 self.foqthreshold,
+                is_dummy=groupname == UNDEFINE_LABEL,
             )
             .set_directory(self.homepath)
             .processindividuals(
@@ -272,16 +292,32 @@ interval between frame (sec): {self.interval}
             logging.info(f"{plotdata}: Not implemented")
             return gridfig
 
-        groups = self.groups[0]
         sgs = {sg.groupname: sg for sg in self.samplegroups}
-        for name, ind_num, idx in groups:
-            ind = sgs[name].fullindlist[ind_num - 1]
+        label_axes = []
+        for name, ind_num, idx in self.groups:
+            sg = sgs[name]
             ax = gridfig.add_subplot(self.rownum, self.colnum, idx + 1)
+            label_axes.append((idx, name, ax))
+            if not sg.is_valid:
+                ax.annotate(
+                    "No data",
+                    xy=(0.5, 0.5),
+                    xycoords="axes fraction",
+                    fontsize=14,
+                    horizontalalignment="center",
+                    verticalalignment="center_baseline",
+                    color="red",
+                    alpha=0.8,
+                    fontweight="bold",
+                )
+                continue
+
+            ind = sg.fullindlist[ind_num - 1]
             if plotdata == "foq":
                 ind.plot_foq(ax)
                 if ind.has_valid_lethargus:
                     for lt in ind.letharguslist:
-                        ind.plot_lethargus(ax, lt, sgs[name].threshold)
+                        ind.plot_lethargus(ax, lt, sg.threshold)
 
             elif plotdata == "area":
                 ax.plot(
@@ -310,14 +346,10 @@ interval between frame (sec): {self.interval}
 
             ax.set_ylim(0, 1.1)
             # ax.set_xlim(0, 5*60*60/interval)
-            ax.spines["right"].set_visible(False)
-            ax.spines["top"].set_visible(False)
             hrtick = np.arange(len(ind.foq) * ind.interval / 60 / 60).astype(int)
             ax.set_xticks(hrtick * 60 * 60 / ind.interval)
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            if xlim is not None:
-                ax.set_xlim(0, xlim)
+            if xlim is not None and len(xlim) == 2:
+                ax.set_xlim(xlim)
 
             ax.annotate(
                 ind.label_str,
@@ -328,7 +360,29 @@ interval between frame (sec): {self.interval}
                 verticalalignment="bottom",
             )
 
-        ax.set_xticklabels(hrtick)
+        for ax in gridfig.get_axes():
+            ax.spines["right"].set_visible(False)
+            ax.spines["top"].set_visible(False)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+
+        last_axes = [
+            max(filter(lambda x: x[1] == name, label_axes), key=lambda x: x[0])
+            for name in sgs.keys()
+        ]
+
+        # retrieve the tail of valid axes
+        idx = max(
+            (x[0] for x in last_axes if x[1] != UNDEFINE_LABEL),
+            default=self.rownum * self.colnum - 1,
+        )
+        hrtick_label = list(map(str, hrtick))
+        for i in range(len(hrtick_label)):
+            if i % (1 + len(hrtick_label) // 10):
+                hrtick_label[i] = ""
+
+        ax = gridfig.get_axes()[idx]
+        ax.set_xticklabels(hrtick_label)
         gridfig.tight_layout()
         gridfig.subplots_adjust(hspace=0.1)
         gridfig.subplots_adjust(wspace=0.01)
@@ -413,9 +467,7 @@ interval between frame (sec): {self.interval}
                 Only support {[n for n in self.project_df.columns]}"
             )
 
-        uniquegroupnames = (
-            uniquegroupnames or self.project_df["groupname"].unique().tolist()
-        )
+        uniquegroupnames = uniquegroupnames or self.uniquegroupnames
         dfs = self.project_df.loc[
             self.project_df["groupname"].isin(uniquegroupnames), ["groupname", params]
         ]
@@ -436,9 +488,10 @@ interval between frame (sec): {self.interval}
         ax.set_ylim(ymin - y_margin, ymax + y_margin)
         ax.set_xlim(-0.5, len(uniquegroupnames) - 0.5)
 
-        ncount = dfs.groupby("groupname")[params].count()
-
-        labelswithsize = [f"{name}\n{num}" for name, num in ncount.items()]
+        ncount = dfs.groupby("groupname")[params].count().to_dict()
+        labelswithsize = [
+            f"{name}\n{ncount.get(name, '')}" for name in uniquegroupnames
+        ]
         if labels is not None and len(labels) >= dfs["groupname"].nunique():
             labelswithsize = [
                 f"{name}\n{num}"
@@ -461,3 +514,78 @@ interval between frame (sec): {self.interval}
             )
         )
         return fig
+
+    def create_summary_slide(self) -> "Project":
+        slidename = self.homepath.joinpath(f"{self.datapath.stem}_summary.pptx")
+        prs = Presentation()
+        # landscape A4
+        prs.slide_width = Cm(29.7)
+        prs.slide_height = Cm(21.0)
+        # empty layout
+        blank_slide_layout = prs.slide_layouts[6]
+        slide = prs.slides.add_slide(blank_slide_layout)
+        info = f"""Basic Parameters:
+Threshold       : {self.foqthreshold}
+number of column: {self.colnum}
+number of row   : {self.rownum}
+orientation     : {self.grouporder}
+"""
+
+        shape = slide.shapes
+        text_box = shape.add_textbox(
+            left=Cm(-1.25), top=Cm(-0.5), height=Cm(0.5), width=Cm(7)
+        )
+        tf = text_box.text_frame
+
+        p = tf.add_paragraph()
+        p.text = info
+        p.font.bold = True
+        p.font.size = Pt(8)
+
+        param = f"""File information:          
+filename: {self.datapath.name}
+date: {self.date}
+experiment name: {self.expname}
+number of experiment: {self.expnum}
+frame interval (sec): {self.interval}
+"""
+
+        text_box = shape.add_textbox(
+            left=Cm(4), top=Cm(-0.5), height=Cm(0.5), width=Cm(7)
+        )
+        tf = text_box.text_frame
+
+        p = tf.add_paragraph()
+        p.text = param
+        p.font.bold = True
+        p.font.size = Pt(8)
+
+        # Add image
+        top = 2.75
+        for p in self.homepath.glob("*.png"):
+            if not "grid" in p.name.lower():
+                continue
+            shape.add_picture(str(p), Cm(0.25), Cm(top), width=Cm(14.2))
+            top += 5.5
+        dot = max(
+            (f for f in self.homepath.glob("*.png") if "dot" in f.name.lower()),
+            default=None,
+        )
+        if dot is not None:
+            shape.add_picture(str(dot), Cm(0.25), Cm(top), height=Cm(7))
+
+        shift = 0
+        heatmaps = sorted(
+            (
+                f
+                for f in self.homepath.glob("*.png")
+                if "heatmap_aligned" in f.name.lower()
+                and f.stem.split("_")[0] in self.uniquegroupnames
+            ),
+            key=lambda f: self.uniquegroupnames.index(f.stem.split("_")[0]),
+        )
+        for f in heatmaps:
+            shape.add_picture(str(f), Cm(14.75), Cm(2.75 + shift), height=Cm(3))
+            shift += 3
+        prs.save(slidename)
+        return self

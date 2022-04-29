@@ -28,6 +28,7 @@ class Samplegroup:
     homepath: Path = field(init=False)
     fullindlist: List[Individual] = field(init=False, default_factory=list)
     indset: Set[int] = field(init=False, default_factory=set)
+    is_dummy: bool = field(repr=False, default=False)
 
     def __post_init__(self):
         self.summarydf = None
@@ -109,6 +110,9 @@ class Samplegroup:
             samplenum=data.name,
             rawdata=data,
         )
+        if self.is_dummy:
+            self.append_individual(ind)
+            return
         logger.info("---------------------")
         logger.info(ind.label_str)
 
@@ -602,7 +606,7 @@ class Samplegroup:
         operation_name: str,
         **kwargs,
     ) -> "Samplegroup":
-        suffix = f"_{operation_name}_.png"
+        suffix = f"_{operation_name}.png"
         figpath = self.homepath.joinpath(self.label_str + suffix)
         figure.savefig(figpath, **kwargs)
         return self

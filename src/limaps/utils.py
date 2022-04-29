@@ -21,8 +21,10 @@ def askdirectory() -> Path:
             parent=root,
             initialdir=Path("."),
             filetypes=[
-                ("Format text(.csv, .xls, .xlsx)", "*.csv *.xls *xlsx"),
-                ("Plain text", "*.txt"),
+                ("Text csv", "*.csv"),
+                ("Excel file", "*.xls *xlsx"),
+                ("Text", "*.txt"),
+                ("All files", "*.*"),
             ],
         )
         or ""

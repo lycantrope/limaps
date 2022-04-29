@@ -14,6 +14,7 @@ dependencies = [
     "pandas",
     "dataclasses",
     "coloredlogs",
+    "python-pptx",
 ]
 
 [project.urls]

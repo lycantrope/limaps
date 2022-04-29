@@ -93,9 +93,17 @@ class Individual:
     #################################################################
     # calculate fraction of q
     # _dataseries is the rawdata which consist of pixel number above threshold
-    def calc_foq(self, _dataseries: pd.Series) -> pd.Series:
+    def calc_foq(self, data: pd.Series) -> pd.Series:
+        """return the 10-min rolling mean value that drop the nan value
+
+        Args:
+            data (pd.Series): a time-lapsed subtraction value
+
+        Returns:
+            pd.Series: 10-min rolling mean (np.float16) dropping the nan
+        """
         return (
-            self.calc_qa(_dataseries)
+            self.calc_qa(data)
             .rolling(window=int(600 / self.interval), center=False)
             .mean()
             .dropna()
@@ -210,7 +218,12 @@ class Individual:
             ax.add_patch(rect)
         return self
 
-    def plot_lethargus(self, ax: axes.Axes, lethargus: Lethargus, threshold: float = 0.05):
+    def plot_lethargus(
+        self,
+        ax: axes.Axes,
+        lethargus: Lethargus,
+        threshold: float = 0.05,
+    ):
         rect = patch.Rectangle(
             (lethargus.start, 0),
             lethargus.end - lethargus.start,
@@ -229,8 +242,8 @@ class Individual:
 
         return ax
 
-    def saveafig(self, targetdir:str, _fig:figure.Figure, opt: str = "foq"):
-        filename = f"{self.label_str}_{opt}.png"        
+    def saveafig(self, targetdir: str, _fig: figure.Figure, opt: str = "foq"):
+        filename = f"{self.label_str}_{opt}.png"
         _fig.savefig(Path(targetdir).joinpath(filename), dpi=100)
 
     def get_summary_df(self) -> pd.DataFrame:

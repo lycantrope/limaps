@@ -11,32 +11,33 @@ def create_a_project():
             rownum=6,
             grouporder="h",
         )
-        .set_targetfile(
-            targetfile=None  # or "/home/hayashi/Desktop/220426_remi2_N2_subtractor/220426_remi2_1_2.csv"
+        .set_targetfile(targetfile="./220426_remi2_1_2.csv")
+        .set_groupnames(
+            uniquegroupnames=["N2"],
+            gindex=[(1, 6)],
         )
-        .set_groupnames(["N2", "empty"], [(1, 6), (7, 8)])
         .read_dataframe()
         .process_samplegroups()
     )
     proj = (
         proj.saveafig(
-            proj.plot_samplegroups_grid("foq", 60, "fq_duration"),
-            "gridfoq.png",
+            figure=proj.plot_samplegroups_grid("foq", 60, "fq_duration"),
+            filename="gridfoq.png",
             dpi=150,
         )
         .saveafig(
-            proj.plot_samplegroups_grid("area", 120, "fq_duration"),
-            f"gridarea.png",
+            figure=proj.plot_samplegroups_grid("area", 120, "fq_duration"),
+            filename="gridarea.png",
             dpi=150,
         )
         .saveafig(
-            proj.dotplots("fqlt_duration"),
-            "fq_duration_dotplot.png",
+            figure=proj.dotplots("fqlt_duration"),
+            filename="fq_duration_dotplot.png",
             dpi=150,
         )
     )
 
-    proj.to_pickle(compression=False)
+    proj.to_pickle().create_summary_slide()
 
 
 if __name__ == "__main__":
