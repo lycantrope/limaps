@@ -26,8 +26,8 @@ class Samplegroup:
     expnum: str
     threshold: float = 0.05
     homepath: Path = field(init=False)
-    fullindlist: List[Individual] = field(init=False, default_factory=list)
-    indset: Set[int] = field(init=False, default_factory=set)
+    fullindlist: List[Individual] = field(init=False, default_factory=list, repr=False)
+    indset: Set[int] = field(init=False, repr=False, default_factory=set)
     is_dummy: bool = field(repr=False, default=False)
 
     def __post_init__(self):

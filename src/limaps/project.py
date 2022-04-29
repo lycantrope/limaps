@@ -32,7 +32,7 @@ class Project:
     grouporder: int = "horizontal"
 
     uniquegroupnames: List[str] = field(init=False, default_factory=list)
-    groups: pd.MultiIndex = field(init=False, default=None)
+    groups: pd.MultiIndex = field(init=False, repr=False, default=None)
 
     date: str = field(init=False)
     expname: str = field(init=False)
@@ -42,9 +42,13 @@ class Project:
     datapath: Path = field(init=False, default=None)
     homepath: Path = field(init=False)
 
-    data: pd.DataFrame = field(init=False)
+    data: pd.DataFrame = field(init=False, repr=False)
 
-    samplegroups: List[Samplegroup] = field(init=False, default_factory=list)
+    samplegroups: List[Samplegroup] = field(
+        init=False,
+        repr=False,
+        default_factory=list,
+    )
 
     # internal value
     _summary: pd.DataFrame = field(init=False, repr=False, default=None)
