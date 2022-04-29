@@ -24,10 +24,11 @@ class Individual:
     interval: float = field()
     samplenum: int = field()
     rawdata: pd.Series = field(repr=False)
+
     # post init value
     raw_df: pd.DataFrame = field(init=False, repr=False, default_factory=pd.DataFrame)
 
-    letharguslist: List[Lethargus] = field(init=False, default_factory=list)
+    letharguslist: List[Lethargus] = field(init=False, repr=False, default_factory=list)
 
     def __post_init__(self):
         self.raw_df = self.raw_df.assign(
