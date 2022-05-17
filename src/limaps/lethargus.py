@@ -41,7 +41,7 @@ class Lethargus:
 
         totalq = qaboolean[ltstart:ltend].sum() * self.interval / 60
         # totalq all imaging duration
-        totalqall = qaboolean[ltstart:ltend].sum() * self.interval / 60
+        totalqall = qaboolean.sum() * self.interval / 60
         # totalq out of lethargus
         totalqout = totalqall - totalq
         # here cause some trouble, is arawdata was seriise totalq is not list.s
@@ -54,12 +54,10 @@ class Lethargus:
         if not len(qstart) or not len(qend):
             return self
         # fix always qstart < qend
-
         if qstart[0] > qend[0]:
             qend = qend[1:]
         if qstart[-1] > qend[-1]:
             qstart = qstart[:-1]
-
         qaboutdataframe = pd.DataFrame().assign(
             qstart=qstart,
             qend=qend,
@@ -70,15 +68,16 @@ class Lethargus:
             f"qstart > {ltstart} & qend < {ltend}"
         )
 
-        lastrow = lethargusperiodqadf.tail(1)
-        qend_aduration = int(lastrow["qend"] + lastrow["aduration"])
+        lastrow_idx = lethargusperiodqadf.tail(1).index
+        lastrow = lethargusperiodqadf.loc[lastrow_idx, :]
+        qend_aduration = int(lastrow["qend"]) + int(lastrow["aduration"])
 
         logger.info(f"qend + aduration {qend_aduration}")
         logger.info(f"ltend {ltend}")
 
         if qend_aduration > ltend:
             logger.info("trim the lastrow data")
-            lethargusperiodqadf.tail(1)["aduration"] = np.nan
+            lastrow["aduration"] = np.nan
 
         numberofbout = len(lethargusperiodqadf)
         logger.info(f"numberofbout {numberofbout}")

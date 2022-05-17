@@ -1,10 +1,10 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
+requires = ["flit_core >=3.2,<4", "wheel", "setuptools>=62.3.0"]
 build-backend = "flit_core.buildapi"
 
 [project]
 name = "limaps"
-authors = [{name = "Taizo Kawano", email = "b97b01045@gmail.com"}]
+authors = [{name = "Taizo Kawano", email = "t3kawano@gmail.com"}, {name="Chung-Kuan Chen", email = "b97b01045@gmail.com"}]
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
 dynamic = ["version", "description"]

@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Optional, Tuple, Union
 
@@ -9,6 +10,7 @@ import coloredlogs
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib import patches
 from matplotlib.figure import Figure
 from pptx import Presentation
 from pptx.util import Cm, Pt
@@ -20,6 +22,7 @@ from .utils import askdirectory
 plt.rcParams["figure.max_open_warning"] = 100
 
 UNDEFINE_LABEL = "unknown"
+HEATSHOCK_LABELS = {"sis", "stress-induced sleep", "heatshock", "hs"}
 
 
 @dataclass
@@ -30,9 +33,11 @@ class Project:
     colnum: int = 8
     rownum: int = 6
     grouporder: int = "horizontal"
+    mode: str = "lethargus"
 
     uniquegroupnames: List[str] = field(init=False, default_factory=list)
     groups: pd.MultiIndex = field(init=False, repr=False, default=None)
+    manual_groups: List[str] = field(init=False, default_factory=list)
 
     date: str = field(init=False)
     expname: str = field(init=False)
@@ -52,6 +57,9 @@ class Project:
 
     # internal value
     _summary: pd.DataFrame = field(init=False, repr=False, default=None)
+
+    def __post_init__(self):
+        self._analyzed_time = datetime.now().strftime(r"%y%m%d_%H%M%S")
 
     def __setstate__(self, kws: Dict[str, Any]) -> None:
         kws["datapath"] = Path(kws.get("datapath"))
@@ -83,7 +91,7 @@ class Project:
             format="%(asctime)s : %(module)s.%(funcName)s : %(levelname)s : %(message)s",
             level=level,
             handlers=[
-                logging.FileHandler(self.homepath.joinpath("history.log")),
+                logging.FileHandler(self.datapath.parent.joinpath("history.log")),
                 stream,
             ],
         )
@@ -105,12 +113,17 @@ class Project:
             raise FileNotFoundError(f"File is not selected or not exist: {targetfile}")
 
         self.datapath = Path(targetfile)
-        self.homepath = self.datapath.parent
         header = self.datapath.stem.split("_")
-        if len(header) != 4:
+        if len(header) != 4 or not all(header):
             raise Exception(
                 f"Format is wrong: {self.datapath.name}.\nPlease rename the filename as `date_groupname_expnum_interval.csv`"
             )
+
+        foldername = f"{self._analyzed_time}_analyzed"
+        if self.mode in HEATSHOCK_LABELS:
+            foldername = f"{self._analyzed_time}_HS_analyzed"
+        self.homepath = self.datapath.parent.joinpath(foldername)
+
         # setup logger
         self.set_logger()
         logging.info(
@@ -120,6 +133,7 @@ Threshold: {self.foqthreshold}
 number of column: {self.colnum}
 number of row: {self.rownum}
 group orientation: {self.grouporder}
+mode: {self.mode}
 """
         )
 
@@ -207,6 +221,17 @@ interval between frame (sec): {self.interval}
         ).sortlevel(2)[0]
         return self
 
+    def set_manual_groups(self, groupnames: List[str]) -> "Project":
+        if not set(groupnames).issubset(self.uniquegroupnames):
+            raise ValueError(f"{groupnames} has invalid value")
+        self.manual_groups = groupnames
+
+        foldername = f"{self._analyzed_time}_manually_analyzed"
+        if self.mode in HEATSHOCK_LABELS:
+            foldername = f"{self._analyzed_time}_HS_manually_analyzed"
+        self.homepath = self.homepath.with_name(foldername)
+        return self
+
     def read_dataframe(self) -> "Project":
         seps = {".csv": ",", ".xls": "\t", ".xlxs": "\t", ".txt": " "}
         sep = seps.get(self.datapath.suffix, ",")
@@ -221,14 +246,13 @@ interval between frame (sec): {self.interval}
         else:
             df = pd.read_csv(path, sep=sep)
         # extract area data only
-        self.data = df[[col for col in df.columns if "area" in col.lower()]].astype(
-            np.int16
-        )
+        self.data = df[[col for col in df.columns if "area" in col.lower()]]
         self.data.columns = self.groups
         return self
 
-    def batch_foreach_samplegroup(self, df: pd.DataFrame):
+    def init_a_samplegroup(self, df: pd.DataFrame) -> Samplegroup:
         groupname = df.columns.get_level_values(0)[0]
+
         sg = (
             Samplegroup(
                 self.date,
@@ -245,29 +269,77 @@ interval between frame (sec): {self.interval}
                 ),
             )
         )
-        self.samplegroups.append(
-            sg.makedf(ltlist=sg.fullindlist)
-            .savesummarydf()
-            .makeltmatrix(align="head")
-            .saveltmatrix(sg.ltfoqmatrix, "fqlt")
-            .makeltmatrix(align="tail")
-            .saveltmatrix(sg.ltfoqmatrixtail, "fqltaligntail")
-            .saveafig(sg.makealignfigure(sg.ltfoqmatrix, True, "mean"), "fqaligned")
-            .saveafig(
-                sg.makealignfigure(sg.ltfoqmatrixtail, False, "mean"),
-                "fqalignedtail",
-            )
-            .saveafig(sg.makeallfigureofareacropped(sg.indlist), "areacropped")
-            .saveafig(sg.makeallfigureofarea(60, sg.fullindlist), "rawareafull")
-            .saveafig(sg.plot_foq_heatmap(align=False), "foq_heatmap")
-            .saveafig(sg.plot_foq_heatmap(align=True), "foq_heatmap_aligned")
-            if sg.is_valid
-            else sg
+        if groupname in self.manual_groups:
+            sg.manual_screen()
+        return sg
+
+    def batch_lethargus_samplegroup(self, df: pd.DataFrame):
+        sg = self.init_a_samplegroup(df)
+
+        sg = sg.saveafig(
+            sg.makeallfigureofarea(
+                60,
+                sg.fullindlist,
+            ),
+            "rawareafull",
+        ).saveafig(
+            sg.plot_foq_heatmap(
+                align=False,
+            ),
+            "foq_heatmap",
         )
+        if sg.is_valid:
+            (
+                sg.makedf(ltlist=sg.fullindlist)
+                .savesummarydf()
+                .makeltmatrix(align="head")
+                .saveltmatrix(sg.ltfoqmatrix, "fqlt")
+                .makeltmatrix(align="tail")
+                .saveltmatrix(sg.ltfoqmatrixtail, "fqltaligntail")
+                .saveafig(sg.makealignfigure(sg.ltfoqmatrix, True, "mean"), "fqaligned")
+                .saveafig(
+                    sg.makealignfigure(sg.ltfoqmatrixtail, False, "mean"),
+                    "fqalignedtail",
+                )
+                .saveafig(sg.makeallfigureofareacropped(sg.indlist), "areacropped")
+                .saveafig(sg.plot_foq_heatmap(align=True), "foq_heatmap_aligned")
+            )
+
+        self.samplegroups.append(sg)
+        return
+
+    def batch_heatshock_samplegroup(self, df: pd.DataFrame):
+        sg = self.init_a_samplegroup(df)
+
+        self.samplegroups.append(
+            sg.make_heatshock_df(start_hr=1.5, end_hr=3.5)
+            .saveafig(
+                sg.makeallfigureofarea(
+                    60,
+                    sg.fullindlist,
+                ),
+                "rawareafull",
+            )
+            .saveafig(
+                sg.plot_foq_heatmap(
+                    align=False,
+                    xlim=timedelta(hours=5.0).seconds / self.interval,
+                ),
+                "foq_heatmap",
+            )
+        )
+
         return
 
     def process_samplegroups(self) -> "Project":
-        self.data.groupby(axis=1, level=0).agg(self.batch_foreach_samplegroup)
+        if not self.homepath.exists():
+            self.homepath.mkdir()
+
+        if self.mode in HEATSHOCK_LABELS:
+            self.data.groupby(axis=1, level=0).agg(self.batch_heatshock_samplegroup)
+            return self
+
+        self.data.groupby(axis=1, level=0).agg(self.batch_lethargus_samplegroup)
         return self
 
     def saveafig(
@@ -290,6 +362,9 @@ interval between frame (sec): {self.interval}
         sdduration: float = 0.11,
         xlim: Optional[Tuple[int, int]] = None,
     ) -> Figure:
+        # TODO
+        # need to simplify the difference of heatshock class and lethargus
+
         gridfig = plt.figure(figsize=(16, 6))
         if plotdata.lower() not in {"foq", "area"}:
             logging.info(f"{plotdata}: Not implemented")
@@ -301,7 +376,7 @@ interval between frame (sec): {self.interval}
             sg = sgs[name]
             ax = gridfig.add_subplot(self.rownum, self.colnum, idx + 1)
             label_axes.append((idx, name, ax))
-            if not sg.is_valid:
+            if not sg.fullindlist:
                 ax.annotate(
                     "No data",
                     xy=(0.5, 0.5),
@@ -318,7 +393,7 @@ interval between frame (sec): {self.interval}
             ind = sg.fullindlist[ind_num - 1]
             if plotdata == "foq":
                 ind.plot_foq(ax)
-                if ind.has_valid_lethargus:
+                if self.mode not in HEATSHOCK_LABELS and ind.has_valid_lethargus:
                     for lt in ind.letharguslist:
                         ind.plot_lethargus(ax, lt, sg.threshold)
 
@@ -332,7 +407,11 @@ interval between frame (sec): {self.interval}
                     color="black",
                 )
 
-            if ind.has_valid_lethargus and overlayparam is not None:
+            if (
+                self.mode not in HEATSHOCK_LABELS
+                and ind.has_valid_lethargus
+                and overlayparam is not None
+            ):
                 if overlayparam == "fq_duration":
                     lt = ind.letharguslist[0]
                     fontcolor = "black"
@@ -354,6 +433,24 @@ interval between frame (sec): {self.interval}
             if xlim is not None and len(xlim) == 2:
                 ax.set_xlim(xlim)
 
+            if self.mode in HEATSHOCK_LABELS:
+                # TODO
+                # this part is for manual imput the time window where to apply the heatshock
+                # pre-capture for 1hr and 30 mins heatshock
+                hs_start_hr = 1
+                hs_end_hr = 1.5
+                hs_start_frame = timedelta(hours=hs_start_hr).seconds / self.interval
+                hs_end_frame = timedelta(hours=hs_end_hr).seconds / self.interval
+                rect = patches.Rectangle(
+                    (hs_start_frame, 0),
+                    hs_end_frame - hs_start_frame,
+                    1,
+                    alpha=0.4,
+                    color="red",
+                    linewidth=0,
+                )
+                ax.set_xlim(0, timedelta(hours=6.5).seconds / self.interval)
+                ax.add_patch(rect)
             ax.annotate(
                 ind.label_str,
                 xy=(0.01, 0.9),
@@ -393,7 +490,8 @@ interval between frame (sec): {self.interval}
 
     def to_pickle(self, compression: bool = True) -> "Project":
         suffix = ".pkl.gz" if compression else ".pkl"
-        path = self.datapath.with_suffix(suffix)
+        filename = self.datapath.with_suffix(suffix).name
+        path = self.homepath.joinpath(filename)
         pd.to_pickle(self, path)
         logging.info(f"Save project at: {path}")
         return self
@@ -454,7 +552,7 @@ interval between frame (sec): {self.interval}
         uniquegroupnames: List[str] = None,
         labels: List[str] = None,
         ylim: Tuple[float, float] = None,
-        figsize: Tuple[float, float] = (4, 8),
+        figsize: Tuple[float, float] = None,
         thickness: float = 1,
         color: str = "black",
         outlier: str = "oc",
@@ -466,8 +564,10 @@ interval between frame (sec): {self.interval}
                 f"{params} is not a valid lethargus parameters.\
                 Only support {[n for n in self.project_df.columns]}"
             )
-
-        uniquegroupnames = uniquegroupnames or self.uniquegroupnames
+        groupname = self.project_df["groupname"].unique()
+        uniquegroupnames = uniquegroupnames or [
+            n for n in self.uniquegroupnames if n in groupname
+        ]
         dfs = self.project_df.loc[
             self.project_df["groupname"].isin(uniquegroupnames), ["groupname", params]
         ]
@@ -478,7 +578,7 @@ interval between frame (sec): {self.interval}
             ymin, ymax = ylim
         # padding the margin with 5%
         y_margin = (ymax - ymin) * 0.05
-
+        figsize = figsize or (0.65 * len(groupname), 4)
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(1, 1, 1)
         ax.spines["right"].set_visible(False)
@@ -513,6 +613,8 @@ interval between frame (sec): {self.interval}
                 jitter_bin=5,
             )
         )
+        fig.suptitle(params.capitalize())
+        fig.tight_layout()
         return fig
 
     def create_summary_slide(self) -> "Project":
@@ -529,6 +631,7 @@ Threshold       : {self.foqthreshold}
 number of column: {self.colnum}
 number of row   : {self.rownum}
 orientation     : {self.grouporder}
+mode            : {self.mode}
 """
 
         shape = slide.shapes
@@ -563,29 +666,62 @@ frame interval (sec): {self.interval}
         # Add image
         top = 2.75
         for p in self.homepath.glob("*.png"):
-            if not "grid" in p.name.lower():
-                continue
-            shape.add_picture(str(p), Cm(0.25), Cm(top), width=Cm(14.2))
-            top += 5.5
-        dot = max(
-            (f for f in self.homepath.glob("*.png") if "dot" in f.name.lower()),
-            default=None,
-        )
-        if dot is not None:
-            shape.add_picture(str(dot), Cm(0.25), Cm(top), height=Cm(7))
+            if "grid" in p.name.lower():
+                shape.add_picture(str(p), Cm(0.25), Cm(top), width=Cm(14.2))
+                top += 5.5
+        shift = 0.25
+        for dot in self.homepath.glob("*.png"):
+            if "dot" in dot.name.lower():
+                shape.add_picture(str(dot), Cm(shift), Cm(top), height=Cm(7))
+                shift += 3.5
 
         shift = 0
         heatmaps = sorted(
             (
                 f
                 for f in self.homepath.glob("*.png")
-                if "heatmap_aligned" in f.name.lower()
+                if "heatmap" in f.name.lower()
                 and f.stem.split("_")[0] in self.uniquegroupnames
             ),
             key=lambda f: self.uniquegroupnames.index(f.stem.split("_")[0]),
         )
+        if self.mode in HEATSHOCK_LABELS:
+            heatmaps = [f for f in heatmaps if "_aligned" not in f.name.lower()]
+        else:
+            heatmaps = [f for f in heatmaps if "_aligned" in f.name.lower()]
+
         for f in heatmaps:
             shape.add_picture(str(f), Cm(14.75), Cm(2.75 + shift), height=Cm(3))
-            shift += 3
+            shift += 3.2
         prs.save(slidename)
+        return self
+
+    def posthoc_screen_samplegroup(self, groupname: str) -> "Project":
+        self._summary = None
+        groupnames = {sg.groupname: sg for sg in self.samplegroups}
+        if groupname not in groupnames:
+            raise ValueError(f"Invalid groupname: {groupname}")
+        self.homepath = self.homepath.parent.joinpath(
+            datetime.now().strftime(r"%y%m%d_%H%M%S_manually_analyzed")
+        )
+        self.homepath.mkdir()
+        sg = groupnames[groupname].set_directory(self.homepath)
+        sg = (
+            sg.manual_screen()
+            .makedf(ltlist=sg.fullindlist)
+            .savesummarydf()
+            .makeltmatrix(align="head")
+            .saveltmatrix(sg.ltfoqmatrix, "fqlt")
+            .makeltmatrix(align="tail")
+            .saveltmatrix(sg.ltfoqmatrixtail, "fqltaligntail")
+            .saveafig(sg.makealignfigure(sg.ltfoqmatrix, True, "mean"), "fqaligned")
+            .saveafig(
+                sg.makealignfigure(sg.ltfoqmatrixtail, False, "mean"),
+                "fqalignedtail",
+            )
+            .saveafig(sg.makeallfigureofareacropped(sg.indlist), "areacropped")
+            .saveafig(sg.makeallfigureofarea(60, sg.fullindlist), "rawareafull")
+            .saveafig(sg.plot_foq_heatmap(align=False), "foq_heatmap")
+            .saveafig(sg.plot_foq_heatmap(align=True), "foq_heatmap_aligned")
+        )
         return self

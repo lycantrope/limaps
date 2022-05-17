@@ -23,6 +23,7 @@ class Individual:
     interval: float = field()
     samplenum: int = field()
     rawdata: pd.Series = field(repr=False)
+    manual: bool = False
 
     # post init value
     raw_df: pd.DataFrame = field(init=False, repr=False, default_factory=pd.DataFrame)
@@ -246,7 +247,7 @@ class Individual:
         filename = f"{self.label_str}_{opt}.png"
         _fig.savefig(Path(targetdir).joinpath(filename), dpi=100)
 
-    def get_summary_df(self) -> pd.DataFrame:
+    def get_summary_df(self) -> pd.Series:
         columns = [
             "date",
             "groupname",
@@ -283,11 +284,58 @@ class Individual:
                 .reset_index()[columns]
             )
 
+    def get_heathock_summary(self, start_hr, end_hr) -> pd.Series:
+        columns = [
+            "date",
+            "groupname",
+            "expnum",
+            "samplenum",
+            "start",
+            "end",
+            "duration",
+            "totalq",
+            "meanquiescent",
+            "meanquiescentout",
+            "numberofbout",
+            "qmean",
+            "amean",
+            "qmedian",
+            "amedian",
+            "qfreq",
+        ]
+        start_frame = round(start_hr * 60 * 60 / self.interval)
+        end_frame = round(end_hr * 60 * 60 / self.interval)
+        lt = Lethargus(self.interval, start_frame, end_frame).calc_measurements(
+            self.qaboolean
+        )
+        return (
+            pd.DataFrame(
+                [lt.get_measures()],
+            )
+            .rename(
+                columns={
+                    "fqlt_start": "start",
+                    "fqlt_end": "end",
+                    "fqlt_duration": "duration",
+                }
+            )
+            .assign(
+                date=self.date,
+                groupname=self.groupname,
+                expnum=str(self.expnum),
+                samplenum=str(self.samplenum),
+            )[columns]
+        )
+
     def savefoqincsvfile(self, targetdir: Path) -> "Individual":
         # save the lethargus period and foq with the date_groupname_expnum_# nam)
         filename = f"{self.label_str}_foq.csv"
         filepath = Path(targetdir).joinpath(filename)
-        fq_period = max(self.fq_oescreendmatrix, key=lambda lt: lt.totalq, default=None)
+        fq_period = max(
+            self.letharguslist or self.fq_oescreendmatrix,
+            key=lambda lt: lt.totalq,
+            default=None,
+        )
         fq_period_str = "{}\n{}\n"
         if fq_period is not None:
             fq_period_str = fq_period_str.format(fq_period.start, fq_period.end)
@@ -367,7 +415,7 @@ class Individual:
             (lt.calc_measurements(self.qaboolean) for lt in onsetexitmatrix),
             key=lambda lt: lt.start,
         )
-        if self.letharguslist is None or not self.letharguslist:
+        if self.fq_oescreendmatrix is None or not self.fq_oescreendmatrix:
             logger.warn(f"{self.label_str}: No lethargus detected")
         return self
 
@@ -434,6 +482,6 @@ class Individual:
             expnum=self.expnum,
             interval=self.interval,
             samplenum=self.samplenum,
-            rawdata=self.rawdata.astype(np.int16),
+            rawdata=self.rawdata,
             letharguslist=self.letharguslist,
         )

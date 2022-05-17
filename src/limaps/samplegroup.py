@@ -28,6 +28,7 @@ class Samplegroup:
     fullindlist: List[Individual] = field(init=False, default_factory=list, repr=False)
     indset: Set[int] = field(init=False, repr=False, default_factory=set)
     is_dummy: bool = field(repr=False, default=False)
+    heatshock: bool = field(repr=True, default=False)
 
     def __post_init__(self):
         self.summarydf = None
@@ -163,6 +164,17 @@ class Samplegroup:
             self.summarydf = pd.concat(
                 (ind.get_summary_df() for ind in ltlist), ignore_index=True
             )
+        return self
+
+    def make_heatshock_df(
+        self, *, start_hr: float = 0.0, end_hr: float = 2.0
+    ) -> "Samplegroup":
+
+        self.summarydf = pd.concat(
+            [ind.get_heathock_summary(start_hr, end_hr) for ind in self.fullindlist],
+            ignore_index=True,
+        )
+
         return self
 
     def calcmaxduration(self, ordinalnum=0) -> "Samplegroup":
@@ -697,8 +709,9 @@ class Samplegroup:
         ax.set_xticklabels(xticklabels)
         # y ticks
         ax.set_ylim(-0.5, sample_num - 0.5)
-        ax.set_yticks(np.linspace(0, sample_num - 1, sample_num // 5 + 1) - 0.5)
-        yticslabels = np.linspace(0, sample_num - 1, sample_num // 5 + 1, dtype=int) + 1
+        yticks = np.linspace(0, sample_num - 1, sample_num // 5 + 1)
+        ax.set_yticks(yticks - 0.5)
+        yticslabels = yticks.astype(int) + 1
         ax.set_yticklabels(yticslabels)
 
         ax.spines["top"].set_visible(False)
@@ -708,3 +721,24 @@ class Samplegroup:
         ax.set_title(self.groupname)
         ax.set_facecolor(facecolor)
         return fig
+
+    def manual_screen(self, overwrite=False) -> "Samplegroup":
+        ld = LethargusDetector(self.threshold)
+        for ind in self.fullindlist:
+            if not overwrite and ind.manual and ind.letharguslist:
+                continue
+            fig, ax = ld.setadata(ind).manual_processdata()
+            self.indset.add(ind.samplenum)
+            ax.annotate(
+                ind.label_str,
+                xy=(0.01, 0.9),
+                xycoords="axes fraction",
+                fontsize=8,
+                horizontalalignment="left",
+                verticalalignment="bottom",
+            )
+
+            ind.saveafig(self.homepath, fig)
+            ind.savefoqincsvfile(self.homepath)
+
+        return self

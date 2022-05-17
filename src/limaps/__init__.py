@@ -127,9 +127,12 @@ You have to eliminate the incorrect data for publication quality analysis.
 20170807 ver.1.1 handle .csv as well
 20170720 ver.1
 
+
+
+20220516 ver 3.0.0 handle the heatshock quiescence, update author
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 
 
 from .dotplot import dotplots

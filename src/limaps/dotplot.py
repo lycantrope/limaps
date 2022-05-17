@@ -7,8 +7,8 @@ Created on Thu Apr 20 10:17:25 2017
 
 from typing import List, Tuple
 
-import matplotlib.pyplot as plt
 import matplotlib.axes as axes
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 

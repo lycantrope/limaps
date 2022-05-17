@@ -1,20 +1,21 @@
 import logging
+import random
 from typing import Optional, Tuple
 
+import matplotlib.colors as mcolors
+import matplotlib.patches as patch
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from .individual import Individual
+from .lethargus import Lethargus
 
 logger = logging.getLogger(__name__)
 
 
 class LethargusDetector:
-    # foq threshod, 0.05 old way, 0.2 for 48x holes may be 0.1 is for 24x?
-    # minimum duration. 1 or 2hrs?
-    # minimul interval between lethargus. 6hrs? 10 hrs
     def __init__(self, foqthreshold, minduration=1.5, mininterval=10):
         self.foqthreshod = foqthreshold
         self.minduration = minduration
@@ -24,126 +25,6 @@ class LethargusDetector:
         self.ind = ind
         self.interval = self.ind.interval
         return self
-
-    def processdata(self) -> Tuple[Figure, Axes]:
-        # here the method to detect lethargus. may be multiple.
-        fig, ax, ax2 = self.prepfig()
-        # ax2.plot(self.ind.foq, linewidth =0.5,
-        #        color = "black", linestyle ="-")
-        ax.plot(self.ind.foq, linewidth=0.5, color="black", linestyle="-")
-        rawdata = self.ind.calc_raw_area(60)
-        ax.plot(
-            rawdata.rolling(window=60).median(),
-            linewidth=0.5,
-            color="gray",
-            linestyle="-",
-        )
-        ax2.axhline(y=self.foqthreshod, linewidth=0.5, color="black", linestyle=":")
-        if self.ind.letharguslist:
-            return fig, ax
-
-        # process individual data
-        self.ind = (
-            self.ind.screen_by_quiet_foq(self.foqthreshod)
-            .screen_by_margin(self.minduration, prepostmargin_hr=1.0)
-            .plot_candidates(ax)
-        )
-
-        while not self.ind.check_interval(self.mininterval):
-            self.ind.filter_by_totalq()
-
-        # plot confirmed graph
-        self.ind.plot_candidates(ax, lt_checked=True).confirm_result()
-
-        return fig, ax
-
-    def plotlethargus(self, _ax, _finallethargusperiod):
-        # ax = _fig.get_axes()[0]
-        # rect = plt.Rectangle((_finallethargusperiod[0],0), _finallethargusperiod[1]-_finallethargusperiod[0],1,alpha = 0.2,hatch="/", color="blue")
-        # rect = plt.Rectangle((_finallethargusperiod[0],0), _finallethargusperiod[1]-_finallethargusperiod[0],0.05, alpha = 0.2, color="blue")
-        rect = plt.Rectangle(
-            (_finallethargusperiod[0], 0),
-            _finallethargusperiod[1] - _finallethargusperiod[0],
-            1,
-            alpha=0.2,
-            color="gray",
-        )
-        _ax.add_patch(rect)
-        lthresh = 0.05
-        _ax.axhline(y=lthresh, color="gray", linewidth=0.5)
-
-        return _ax
-
-    # foq based or area rate based are defined by input arg _oescreendmatrix.
-    # self.ind.fq_oescreendmatrix
-    def detectlethargus(self):
-        # if there is one, [[aaa, bbb]], two [[aaa,bbb],[ccc,ddd]]
-        finallethargusperiods = []
-        if not len(self.ind.fq_oescreendmatrix):
-            logger.info("This sample doesn't match lethargus criteria")
-            # dataname = thedate + "_" + genotype+ "_" + str(samplenum +1) +  "_" +str(interval)
-            # fig.savefig(dataname+"foqandlethargus.png",figsize=(8,2),dpi=100)
-            return finallethargusperiods
-        # if ther are multiple lethargus state, choose by human eye?
-        # if there are more than 2, need to check interval between them
-
-        if len(self.ind.fq_oescreendmatrix) > 1:
-            # .ginput return [()]
-            """
-            logger.info("please click lethargus period")
-            ax.annotate("please click lethargus period",\
-                        xy=(0.05, 0.8),\
-                        xycoords='axes fraction', fontsize=8,\
-                        horizontalalignment='left', verticalalignment='bottom')
-            clickpos = plt.ginput(n=1)[0]
-            logger.info(clickpos)
-            for oei in self.ind.fq_oescreendmatrix:
-                if oei[0] < clickpos[0] < oei[1]:
-                    finallethargusperiod=oei.copy()
-                    rect = plt.Rectangle((finallethargusperiod[0],0), 
-                                finallethargusperiod[1]-finallethargusperiod[0],
-                                1,alpha = 0.2,hatch="/", color="blue")
-                    ax.add_patch(rect)
-            if finallethargusperiod == []:
-                logger.info("you didnt choose any candidate")
-                ax.annotate("you didnt choose any candidate",\
-                        xy=(0.05, 0.7),\
-                        xycoords='axes fraction', fontsize=8,\
-                        horizontalalignment='left', 
-                        verticalalignment='bottom', color = "red")
-            """
-
-            # here is some filter to check if they are actual lethargus.
-            # interval, mean foq? etc...
-            # 1st, filter by rawdata.rolling > threshold 0.01 rate
-            # -> seems not work well l3 lethargus tend have high rate?
-            """
-            rawdata = self.ind.calcrawarea(60)
-            rmrawdata = rawdata.rolling(window = 60).median()
-            threshold = 0.01
-            for lt in self.ind.fq_oescreendmatrix:
-                logger.info(lt)
-                #1min running median over the thredhold
-                sumoverth = sum((rmrawdata[lt[0]: lt[1]]) > threshold)
-                #if overthe threshold time is more than 80 %
-                if (sumoverth/(lt[1]-lt[0])) > 0.8:
-                    logger.info(sumoverth/(lt[1]-lt[0]))
-                    logger.info("This has high motion rate")
-                else:
-                    logger.info("This one seems lethargus")
-                    finallethargusperiods.append(lt)
-            """
-
-        else:
-            finallethargusperiods = self.ind.fq_oescreendmatrix.copy()
-
-        logger.info(f"finallethargusperiods {finallethargusperiods}")
-        # rect = plt.Rectangle((finallethargusperiod[0],0), finallethargusperiod[1]-finallethargusperiod[0],1,alpha = 0.2,hatch="/", color="blue")
-        # ax.add_patch(rect)
-        return finallethargusperiods
-
-        # dataname = thedate + "_" + genotype+ "_" + str(samplenum+1) +  "_" +str(interval)
-        # fig.savefig(dataname+"foqandlethargus.png",figsize=(8,2),dpi=100)
 
     def prepfig(
         self, figsize: Tuple[float, float] = (8, 2), **kwargs
@@ -209,3 +90,140 @@ class LethargusDetector:
         # ax.xaxis.tick_top()
         ax.set_xticklabels(hrtick)
         return fig, ax, ax2
+
+    def processdata(self) -> Tuple[Figure, Axes]:
+        # here the method to detect lethargus. may be multiple.
+        fig, ax, ax2 = self.prepfig()
+        # ax2.plot(self.ind.foq, linewidth =0.5,
+        #        color = "black", linestyle ="-")
+        ax.plot(self.ind.foq, linewidth=0.5, color="black", linestyle="-")
+        rawdata = self.ind.calc_raw_area(60)
+        ax.plot(
+            rawdata.rolling(window=60).median(),
+            linewidth=0.5,
+            color="gray",
+            linestyle="-",
+        )
+        ax2.axhline(y=self.foqthreshod, linewidth=0.5, color="black", linestyle=":")
+        if self.ind.letharguslist:
+            return fig, ax
+
+        # process individual data
+        self.ind = (
+            self.ind.screen_by_quiet_foq(self.foqthreshod)
+            .screen_by_margin(self.minduration, prepostmargin_hr=1.0)
+            .plot_candidates(ax)
+        )
+
+        while not self.ind.check_interval(self.mininterval):
+            self.ind.filter_by_totalq()
+
+        # plot confirmed graph
+        self.ind.plot_candidates(ax, lt_checked=True).confirm_result()
+
+        return fig, ax
+
+    def manual_processdata(self, minimal_interval=20) -> Tuple[Figure, Axes]:
+        fig, ax, ax2 = self.prepfig()
+        # ax2.plot(self.ind.foq, linewidth =0.5,
+        #        color = "black", linestyle ="-")
+        ax.plot(self.ind.foq, linewidth=0.5, color="black", linestyle="-")
+        rawdata = self.ind.calc_raw_area(60)
+        area = rawdata.rolling(window=60).median()
+        ax.plot(
+            area,
+            linewidth=0.5,
+            color="gray",
+            linestyle="-",
+        )
+        ax2.axhline(y=self.foqthreshod, linewidth=1, color="black", linestyle=":")
+
+        # process individual data
+        self.ind = self.ind.screen_by_quiet_foq(self.foqthreshod).plot_candidates(ax)
+
+        onset = self.ind.fq_onsetcandidates.flatten()
+        offset = self.ind.fq_exitcandidates.flatten()
+        while offset[0] < onset[0]:
+            offset = offset[1:]
+
+        while onset[-1] > offset[-1]:
+            onset = onset[:-1]
+
+        if not len(onset) * len(offset):
+            logger.error(
+                f"No onset and offset were found when screening at {self.foqthreshod}"
+            )
+            return
+        get_color = lambda: random.choice([*mcolors.TABLEAU_COLORS.values()])
+        color = get_color()
+        # 15 min interval
+        interval_frame = 60 * minimal_interval / self.interval
+        for i, (on, off) in enumerate(zip(onset, offset)):
+            if i != 0 and on - offset[i - 1] > interval_frame:
+                pre_color = color
+                while pre_color == color:
+                    color = get_color()
+            rect = patch.Rectangle(
+                (on, 0),
+                off - on,
+                height=0.9,
+                alpha=0.2,
+                color=color,
+            )
+            ax.add_patch(rect)
+
+        lt = {}
+        while lt.get("start") is None:
+            clickpos = plt.ginput(n=1)
+            if clickpos and clickpos[0]:
+                idx_x, _ = clickpos[0]
+                idx_pos = idx_x * len(self.ind.foq)
+                lt["start"] = onset[np.argmin(np.abs(onset - idx_pos))]
+
+        ax.axvline(lt["start"], linewidth=1.5, color="red", linestyle=":")
+        while lt.get("end") is None:
+            clickpos = plt.ginput(n=1)
+            if clickpos and clickpos[0]:
+                idx_x, _ = clickpos[0]
+                idx_pos = idx_x * len(self.ind.foq)
+                lt["end"] = offset[np.argmin(np.abs(offset - idx_pos))]
+        ax.axvline(lt["end"], linewidth=1.5, color="red", linestyle=":")
+
+        plt.close(fig)
+        fig, ax, ax2 = self.prepfig()
+        # ax2.plot(self.ind.foq, linewidth =0.5,
+        #        color = "black", linestyle ="-")
+        ax.plot(self.ind.foq, linewidth=0.5, color="black", linestyle="-")
+        ax.plot(
+            area,
+            linewidth=0.5,
+            color="gray",
+            linestyle="-",
+        )
+        ax2.axhline(y=self.foqthreshod, linewidth=1, color="black", linestyle=":")
+        rect = patch.Rectangle(
+            (lt["start"], 0),
+            lt["end"] - lt["start"],
+            height=0.9,
+            alpha=0.4,
+            color="red",
+        )
+        ax.add_patch(rect)
+        clickpos = None
+        while not clickpos:
+            clickpos = plt.ginput(n=1)
+        idx_x, _ = clickpos[0]
+        idx_pos = idx_x * len(self.ind.foq)
+        plt.close(fig)
+        if idx_pos < lt["start"] or idx_pos > lt["end"]:
+            return self.manual_processdata()
+
+        self.ind.letharguslist = [
+            Lethargus(
+                self.ind.interval,
+                lt["start"],
+                lt["end"],
+            ).calc_measurements(self.ind.qaboolean)
+        ]
+        self.ind.manual = True
+        return fig, ax
