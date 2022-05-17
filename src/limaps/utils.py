@@ -19,7 +19,7 @@ def askdirectory() -> Path:
     targetfile = (
         dialog.askopenfilename(
             parent=root,
-            initialdir=Path("."),
+            initialdir=Path.home().joinpath("Desktop"),
             filetypes=[
                 ("Text csv", "*.csv"),
                 ("Excel file", "*.xls *xlsx"),
