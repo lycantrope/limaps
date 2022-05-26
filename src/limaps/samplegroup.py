@@ -580,6 +580,8 @@ class Samplegroup:
         )
 
         for ax, ind in zip(axlist, indlist):
+            if not ind.has_valid_lethargus:
+                continue
             # if (ind.letharguslist is not None) and (len(ind.letharguslist) > 0):
             ltstart = ind.letharguslist[ordinalnum].start
             ltend = ind.letharguslist[ordinalnum].end

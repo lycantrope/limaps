@@ -143,17 +143,17 @@ class LethargusDetector:
 
         onset = self.ind.fq_onsetcandidates.flatten()
         offset = self.ind.fq_exitcandidates.flatten()
-        while offset[0] < onset[0]:
+        while len(offset) > 1 and offset[0] < onset[0]:
             offset = offset[1:]
 
-        while onset[-1] > offset[-1]:
+        while len(onset) > 1 and onset[-1] > offset[-1]:
             onset = onset[:-1]
 
         if not len(onset) * len(offset):
             logger.error(
                 f"No onset and offset were found when screening at {self.foqthreshod}"
             )
-            return
+            return fig, ax
         get_color = lambda: random.choice([*mcolors.TABLEAU_COLORS.values()])
         color = get_color()
         # 15 min interval
