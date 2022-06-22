@@ -15,6 +15,7 @@ dependencies = [
     "dataclasses",
     "coloredlogs",
     "python-pptx",
+    "h5py",
 ]
 
 [project.urls]

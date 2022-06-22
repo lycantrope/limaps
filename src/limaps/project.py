@@ -437,8 +437,8 @@ interval between frame (sec): {self.interval}
                 # TODO
                 # this part is for manual imput the time window where to apply the heatshock
                 # pre-capture for 1hr and 30 mins heatshock
-                hs_start_hr = 1
-                hs_end_hr = 1.5
+                hs_start_hr = 0
+                hs_end_hr = 0
                 hs_start_frame = timedelta(hours=hs_start_hr).seconds / self.interval
                 hs_end_frame = timedelta(hours=hs_end_hr).seconds / self.interval
                 rect = patches.Rectangle(
@@ -500,7 +500,13 @@ interval between frame (sec): {self.interval}
     def from_pickle(cls, filepath: Union[str, Path]) -> "Project":
         if not Path(filepath).is_file():
             raise FileNotFoundError(filepath)
-        return pd.read_pickle(filepath)
+        proj = pd.read_pickle(filepath)
+        new_proj = cls()
+        new_proj.__dict__.update(proj.__dict__)
+        new_proj.homepath = Path(filepath).parent
+        for sg in new_proj.samplegroups:
+            sg.homepath = new_proj.homepath
+        return new_proj
 
     @property
     def project_df(self) -> pd.DataFrame:

@@ -1,8 +1,10 @@
+import json
 import logging
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
-import json
-from pathlib import Path
+HOMEDIR = os.getenv("LIMAPS_INITIAL_DIR", str(Path.home().joinpath("Desktop")))
 
 try:
     import tkinter
@@ -19,7 +21,7 @@ def askdirectory() -> Path:
     targetfile = (
         dialog.askopenfilename(
             parent=root,
-            initialdir=Path.home().joinpath("Desktop"),
+            initialdir=HOMEDIR,
             filetypes=[
                 ("Text csv", "*.csv"),
                 ("Excel file", "*.xls *xlsx"),

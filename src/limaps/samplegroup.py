@@ -115,10 +115,15 @@ class Samplegroup:
             return
         logger.info("---------------------")
         logger.info(ind.label_str)
-
-        fig, ax = ld.setadata(ind).processdata()
+        hdf_p = self.homepath.joinpath(ind.label_str + ".h5")
+        try:
+            fig, ax = ld.setadata(ind).processdata()
+        except Exception as e:
+            ind.to_hdf(hdf_p)
+            raise e
 
         ind.savefoqincsvfile(self.homepath)
+        ind.to_hdf(hdf_p)
 
         self.append_individual(ind)
 
@@ -217,7 +222,9 @@ class Samplegroup:
                     )
                 )
                 for ind in self.fullindlist
-                if ind.has_valid_lethargus and len(ind.letharguslist) > ordinalnum
+                if ind.has_valid_lethargus
+                and len(ind.letharguslist) > ordinalnum
+                and ind in self.indlist
             ],
             axis=1,
         ).values.T
@@ -742,5 +749,16 @@ class Samplegroup:
 
             ind.saveafig(self.homepath, fig)
             ind.savefoqincsvfile(self.homepath)
+            ind.to_hdf(self.homepath.joinpath(ind.label_str + ".h5"))
 
+        return self
+
+    def save_all_individuals(self, datetype="hdf") -> "Samplegroup":
+        home = self.homepath if self.homepath.exists() else Path(".")
+        if datetype.lower() in ("pkl", "pickle"):
+            for ind in self.fullindlist:
+                pd.to_pickle(ind, home.joinpath(ind.label_str + ".pkl.gz"))
+        if datetype.lower() in ("hdf", "h5"):
+            for ind in self.fullindlist:
+                ind.to_hdf(home.joinpath(ind.label_str + ".h5"))
         return self

@@ -123,7 +123,11 @@ class LethargusDetector:
 
         return fig, ax
 
-    def manual_processdata(self, minimal_interval=20) -> Tuple[Figure, Axes]:
+    def manual_processdata(
+        self,
+        minimal_epoch_mins=5,
+        minimal_interval_mins=20,
+    ) -> Tuple[Figure, Axes]:
         fig, ax, ax2 = self.prepfig()
         # ax2.plot(self.ind.foq, linewidth =0.5,
         #        color = "black", linestyle ="-")
@@ -157,12 +161,15 @@ class LethargusDetector:
         get_color = lambda: random.choice([*mcolors.TABLEAU_COLORS.values()])
         color = get_color()
         # 15 min interval
-        interval_frame = 60 * minimal_interval / self.interval
-        for i, (on, off) in enumerate(zip(onset, offset)):
-            if i != 0 and on - offset[i - 1] > interval_frame:
+        interval_frame = 60 * minimal_interval_mins / self.interval
+        epoch_frame = 60 * minimal_epoch_mins / self.interval
+        prev_end = None
+        for on, off in zip(onset, offset):
+            if prev_end is not None and on - prev_end > interval_frame:
                 pre_color = color
                 while pre_color == color:
                     color = get_color()
+            prev_end = off
             rect = patch.Rectangle(
                 (on, 0),
                 off - on,

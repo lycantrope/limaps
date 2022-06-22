@@ -7,12 +7,32 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+LETHARGUS_DTYPES = np.dtype(
+    [
+        ("interval", "f8"),
+        ("start", "i8"),
+        ("end", "i8"),
+        ("meanquiescent", "f8"),
+        ("meanquiescentout", "f8"),
+        ("totalq", "i8"),
+        ("numberofbout", "f8"),
+        ("qmean", "f8"),
+        ("amean", "f8"),
+        ("qmedian", "f8"),
+        ("amedian", "f8"),
+        ("fq_duration", "f8"),
+        ("qfreq", "f8"),
+    ]
+)
+
+
 @dataclass
 class Lethargus:
     interval: int = field()
     start: int = field()
     end: int = field()
     meanquiescent: float = field(init=False, default=np.nan)
+    meanquiescentout: float = field(init=False, default=np.nan)
     totalq: int = field(init=False, default=-1)
     numberofbout: float = field(init=False, default=np.nan)
     qmean: float = field(init=False, default=np.nan)
@@ -34,18 +54,43 @@ class Lethargus:
     )
     distanceproblem: bool = field(init=False, repr=False, default=False)
 
-    def calc_measurements(self, qaboolean: pd.Series) -> "Lethargus":
+    def calc_measurements(
+        self,
+        qaboolean: pd.Series,
+        heatshock: bool = False,
+    ) -> "Lethargus":
         # lethargus start and end
         ltstart = self.start
         ltend = self.end
+        # duration
+        fq_duration = (ltend - ltstart) * self.interval / 60 / 60
 
+        # here cause some trouble, is arawdata was seriise totalq is not list.s
         totalq = qaboolean[ltstart:ltend].sum() * self.interval / 60
+        logger.info(f"totalq {int(totalq)} min")
+
         # totalq all imaging duration
         totalqall = qaboolean.sum() * self.interval / 60
         # totalq out of lethargus
         totalqout = totalqall - totalq
-        # here cause some trouble, is arawdata was seriise totalq is not list.s
-        logger.info(f"totalq {int(totalq)} min")
+
+        # quiescent / time neary= mean foq
+        meanquiescent = totalq / ((ltend - ltstart) * self.interval / 60)
+        logger.info(f"meanquiescent {meanquiescent}")
+
+        # 180226 meanquiescentout is not correct way if multiple lethargus are deteced
+        meanquiescentout = totalqout / (
+            (len(qaboolean) - (ltend - ltstart)) * self.interval / 60
+        )
+        logger.info(f"meanquiescentout {meanquiescentout}")
+
+        self.fq_duration = fq_duration
+        self.totalq = totalq
+        self.meanquiescent = meanquiescent
+        self.meanquiescentout = meanquiescentout
+
+        if heatshock:
+            return self
 
         # calc q and a bout duration
         qabooleandiff = qaboolean.astype(int).diff()
@@ -70,14 +115,15 @@ class Lethargus:
 
         lastrow_idx = lethargusperiodqadf.tail(1).index
         lastrow = lethargusperiodqadf.loc[lastrow_idx, :]
-        qend_aduration = int(lastrow["qend"]) + int(lastrow["aduration"])
+        if len(lastrow):
+            qend_aduration = float(lastrow["qend"]) + float(lastrow["aduration"])
 
-        logger.info(f"qend + aduration {qend_aduration}")
-        logger.info(f"ltend {ltend}")
+            logger.info(f"qend + aduration {qend_aduration}")
+            logger.info(f"ltend {ltend}")
 
-        if qend_aduration > ltend:
-            logger.info("trim the lastrow data")
-            lastrow["aduration"] = np.nan
+            if qend_aduration > ltend:
+                logger.info("trim the lastrow data")
+                lastrow["aduration"] = np.nan
 
         numberofbout = len(lethargusperiodqadf)
         logger.info(f"numberofbout {numberofbout}")
@@ -96,27 +142,14 @@ class Lethargus:
         logger.info(f"amedian {amedian}frame")
 
         # frequency /hour
-        fq_duration = (ltend - ltstart) * self.interval / 60 / 60
         qfreq = numberofbout / fq_duration
         logger.info(f"qfreq {np.round(qfreq, 2)} num/hour")
-        # quiescent / time neary= mean foq
-        meanquiescent = totalq / ((ltend - ltstart) * self.interval / 60)
-        logger.info(f"meanquiescent {meanquiescent}")
-        # 180226 meanquiescentout is not correct way if multiple lethargus are deteced
-        meanquiescentout = totalqout / (
-            (len(qaboolean) - (ltend - ltstart)) * self.interval / 60
-        )
-        logger.info(f"meanquiescentout {meanquiescentout}")
 
-        self.meanquiescent = meanquiescent
-        self.meanquiescentout = meanquiescentout
-        self.totalq = totalq
         self.numberofbout = numberofbout
         self.qmean = qmean
         self.amean = amean
         self.qmedian = qmedian
         self.amedian = amedian
-        self.fq_duration = fq_duration
         self.qfreq = qfreq
         self.qaboutdataframe = qaboutdataframe
         self.lethargusperiodqadf = lethargusperiodqadf
@@ -174,3 +207,55 @@ class Lethargus:
             return pd.Series(np.fliplr(padding_foq[:, None]).flatten())
         else:
             return pd.Series(padding_foq)
+
+    def to_numpy_arr(self) -> np.ndarray:
+        data = [
+            self.interval,
+            self.start,
+            self.end,
+            self.meanquiescent,
+            self.meanquiescentout,
+            self.totalq,
+            self.numberofbout,
+            self.qmean,
+            self.amean,
+            self.qmedian,
+            self.amedian,
+            self.fq_duration,
+            self.qfreq,
+        ]
+        data = tuple(val if not np.isnan(val) else -1 for val in data)
+        return np.array(
+            [data],
+            dtype=LETHARGUS_DTYPES,
+        )
+
+    @classmethod
+    def from_numpy_arr(
+        cls,
+        interval: int,
+        start: int,
+        end: int,
+        meanquiescent: float,
+        meanquiescentout: float,
+        totalq: int,
+        numberofbout: float,
+        qmean: float,
+        amean: float,
+        qmedian: float,
+        amedian: float,
+        fq_duration: float,
+        qfreq: float,
+    ):
+        leth = cls(interval, start, end)
+        leth.meanquiescent = meanquiescent
+        leth.meanquiescentout = meanquiescentout
+        leth.totalq = totalq
+        leth.numberofbout = numberofbout
+        leth.qmean = qmean
+        leth.amean = amean
+        leth.qmedian = qmedian
+        leth.amedian = amedian
+        leth.fq_duration = fq_duration
+        leth.qfreq = qfreq
+        return leth

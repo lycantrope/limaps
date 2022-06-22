@@ -1,8 +1,11 @@
+import json
 import logging
+from curses import raw
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
+import h5py
 import matplotlib.axes as axes
 import matplotlib.figure as figure
 import matplotlib.patches as patch
@@ -10,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .lethargus import Lethargus
+from .lethargus import LETHARGUS_DTYPES, Lethargus
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +309,8 @@ class Individual:
         start_frame = round(start_hr * 60 * 60 / self.interval)
         end_frame = round(end_hr * 60 * 60 / self.interval)
         lt = Lethargus(self.interval, start_frame, end_frame).calc_measurements(
-            self.qaboolean
+            self.qaboolean,
+            heatshock=True,
         )
         return (
             pd.DataFrame(
@@ -471,9 +475,12 @@ class Individual:
     def __setstate__(self, kws: Dict[str, Any]) -> None:
         letharguslist = kws.get("letharguslist")
         self.__dict__.update(kws)
+        self.__dict__["rawdata"] = self.__dict__["rawdata"].astype("f8")
         self.__dict__["raw_df"] = pd.DataFrame()
         self.__post_init__()
         self.__dict__["letharguslist"] = letharguslist
+        if self.rawdata.sum() == 0:
+            logger.warning(f"{self.label_str} contains a empty rawdata")
 
     def __getstate__(self) -> Dict[str, Any]:
         return dict(
@@ -482,6 +489,81 @@ class Individual:
             expnum=self.expnum,
             interval=self.interval,
             samplenum=self.samplenum,
-            rawdata=self.rawdata,
+            rawdata=self.rawdata.fillna(0).astype("u2"),
             letharguslist=self.letharguslist,
         )
+
+    def to_hdf(self, filepath: Union[str, Path]) -> None:
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
+        if not filepath.name.endswith(".h5"):
+            filepath = filepath.with_suffix(".h5")
+
+        with h5py.File(filepath, "w") as file:
+            dset = file.create_dataset(
+                "rawdata",
+                data=self.rawdata.fillna(0).values.astype("u2"),
+                compression="gzip",
+            )
+            number_of_lethargus = (
+                0 if self.letharguslist is None else len(self.letharguslist)
+            )
+
+            dset.attrs["header"] = json.dumps(
+                dict(
+                    labelstr=self.label_str,
+                    date=self.date,
+                    groupname=self.groupname,
+                    expnum=int(self.expnum),
+                    interval=float(self.interval),
+                    samplenum=int(self.samplenum),
+                    manual=int(self.manual),
+                    number_of_lethargus=number_of_lethargus,
+                )
+            )
+            if self.letharguslist:
+                leth_arr = np.concatenate(
+                    [leth.to_numpy_arr() for leth in self.letharguslist]
+                )
+
+                dset = file.create_dataset(
+                    "lethargus",
+                    data=leth_arr,
+                    compression="gzip",
+                    dtype=LETHARGUS_DTYPES,
+                )
+
+    @classmethod
+    def from_hdf(cls, filepath: Union[str, Path]) -> "Individual":
+        if isinstance(filepath, str):
+            filepath = Path(str)
+
+        if not filepath.exists():
+            raise FileNotFoundError(filepath)
+
+        if not filepath.name.lower().endswith((".h5", ".hdf")):
+            raise TypeError(f"{filepath.name} is not a hdf file (.h5, .hdf)")
+
+        lethargus_arr = np.empty(shape=0, dtype=LETHARGUS_DTYPES)
+        with h5py.File(filepath, "r") as file:
+            rawdata = file["rawdata"][()]
+            header = json.loads(file["rawdata"].attrs["header"])
+            if header["number_of_lethargus"] > 0 and "lethargus" in file.keys():
+                lethargus_arr = file["lethargus"][()]
+        if rawdata.sum() == 0:
+            logger.warning(f"{filepath.name} contains a empty rawdata")
+
+        ind = cls(
+            date=header["date"],
+            groupname=header["groupname"],
+            expnum=header["expnum"],
+            interval=header["interval"],
+            samplenum=header["samplenum"],
+            manual=bool(header["manual"]),
+            rawdata=pd.Series(rawdata.astype("f8")),
+        )
+
+        ind.letharguslist = [Lethargus.from_numpy_arr(*a) for a in lethargus_arr]
+
+        return ind
