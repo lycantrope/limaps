@@ -39,13 +39,13 @@ class Project:
     groups: pd.MultiIndex = field(init=False, repr=False, default=None)
     manual_groups: List[str] = field(init=False, default_factory=list)
 
-    date: str = field(init=False)
-    expname: str = field(init=False)
-    expnum: str = field(init=False)
-    interval: float = field(init=False)
+    date: str = field(init=False, default="")
+    expname: str = field(init=False, default="")
+    expnum: str = field(init=False, default="")
+    interval: float = field(init=False, default=np.nan)
 
     datapath: Path = field(init=False, default=None)
-    homepath: Path = field(init=False)
+    homepath: Path = field(init=False, default=None)
 
     data: pd.DataFrame = field(init=False, repr=False)
 
@@ -202,7 +202,8 @@ interval between frame (sec): {self.interval}
                     for i, col in enumerate(indexgrid[ilist, :].ravel())
                 ]
             )
-            logging.warn(f"{ilist} are assigned as `unknown` group")
+            msg_list = [i + 1 for i in ilist]
+            logging.warn(f"{msg_list} are assigned as `unknown` group")
 
         group_grid = [["-" for _ in range(self.colnum)] for _ in range(self.rownum)]
         width = 0
