@@ -1,6 +1,5 @@
 import json
 import logging
-from curses import raw
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Union
@@ -371,7 +370,6 @@ class Individual:
         min_duration_hr: float,
         prepostmargin_hr: float = 1.0,
     ) -> "Individual":
-
         if self.fq_qbooleanvec is None or not len(self.fq_onsetcandidates):
             return self
 
@@ -461,7 +459,6 @@ class Individual:
         return self
 
     def confirm_result(self) -> "Individual":
-
         # shallow copy and sorted with total quiescence
         if self.fq_oescreendmatrix is None or not self.fq_oescreendmatrix:
             self.fq_oescreendmatrix = []
