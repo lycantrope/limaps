@@ -537,7 +537,7 @@ class Individual:
     @classmethod
     def from_hdf(cls, filepath: Union[str, Path]) -> "Individual":
         if isinstance(filepath, str):
-            filepath = Path(str)
+            filepath = Path(filepath)
 
         if not filepath.exists():
             raise FileNotFoundError(filepath)
