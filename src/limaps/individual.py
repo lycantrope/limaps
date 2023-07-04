@@ -96,18 +96,18 @@ class Individual:
     #################################################################
     # calculate fraction of q
     # _dataseries is the rawdata which consist of pixel number above threshold
-    def calc_foq(self, data: pd.Series) -> pd.Series:
-        """return the 10-min rolling mean value that drop the nan value
-
+    def calc_foq(self, data: pd.Series, windowsize: int = 600) -> pd.Series:
+        """return the rolling mean value that drop the nan value
         Args:
             data (pd.Series): a time-lapsed subtraction value
+            windowsize (int, optional): the size of rolling window (sec). Defaults to 600 sec.
 
         Returns:
             pd.Series: 10-min rolling mean (np.float16) dropping the nan
         """
         return (
             self.calc_qa(data)
-            .rolling(window=int(600 / self.interval), center=False)
+            .rolling(window=int(windowsize / self.interval), center=False)
             .mean()
             .dropna()
             .reset_index(drop=True)
@@ -345,12 +345,12 @@ class Individual:
         with open(filepath, "w") as file:
             file.write(f"{self.label_str}_{self.interval}\n")
             file.write(fq_period_str)
-        self.foq.dropna().astype(np.float16).to_csv(
-            filepath,
-            mode="a",
-            header=False,
-            index=False,
-        )
+            self.foq.dropna().astype(np.float16).to_csv(
+                file,
+                mode="a",
+                header=False,
+                index=False,
+            )
         return self
 
     def screen_by_quiet_foq(self, foq_threshold: float) -> "Individual":

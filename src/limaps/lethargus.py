@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass, field
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -175,33 +176,28 @@ class Lethargus:
     def crop_and_pad_foq(
         self,
         foq: pd.Series,
-        padding: float = 1,
-        mode: str = "both",
+        padding: Tuple[float, float] = (1.0, 1.0),
         flip: bool = False,
     ) -> pd.Series:
-        modes = ("both", "head", "tail")
-        if mode.lower() not in modes:
-            raise TypeError(f"mode only support {modes}")
+        if not (isinstance(padding, tuple) and len(padding) == 2):
+            raise ValueError(f"padding is not a size-2 tuple")
 
-        padding_size = max(int(60 * 60 * padding / self.interval), 0)
-        arr_size = self.end - self.start + 1
-        if mode.lower() == "both":
-            arr_size += padding_size * 2
-        elif mode.lower() in ("head", "tail"):
-            arr_size += padding_size
+        pre, post = padding
+
+        pre = max(int(60 * 60 * pre / self.interval), 0)
+        post = max(int(60 * 60 * post / self.interval), 0)
+        arr_size = self.end - self.start + 1 + pre + post
 
         padding_foq = np.full(arr_size, fill_value=np.nan)
         start = self.start
         end = self.end
-        if mode.lower() in ("both", "head"):
-            start = max(start - padding_size, 0)
-        if mode.lower() in ("both", "tail"):
-            end = min(self.end + padding_size, len(foq))
+
+        start = max(start - pre, 0)
+        end = min(self.end + post, len(foq))
 
         crop_foq = foq.values[start:end]
-        shift = 0
-        if mode.lower() in ("both", "head"):
-            shift = max(0, padding_size - self.start)
+
+        shift = max(0, pre - self.start)
         padding_foq[shift : len(crop_foq) + shift] = crop_foq
         if flip:
             return pd.Series(np.fliplr(padding_foq[:, None]).flatten())

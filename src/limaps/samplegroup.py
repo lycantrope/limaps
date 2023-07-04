@@ -78,7 +78,6 @@ class Samplegroup:
         min_duration: float = 1.5,
         min_interval: int = 10,
     ) -> "Samplegroup":
-
         ld = LethargusDetector(self.threshold, min_duration, min_interval)
         dataframe.rename(
             columns={n: i + 1 for i, n in enumerate(dataframe.columns)}
@@ -174,7 +173,6 @@ class Samplegroup:
     def make_heatshock_df(
         self, *, start_hr: float = 0.0, end_hr: float = 2.0
     ) -> "Samplegroup":
-
         self.summarydf = pd.concat(
             [ind.get_heathock_summary(start_hr, end_hr) for ind in self.fullindlist],
             ignore_index=True,
@@ -184,7 +182,7 @@ class Samplegroup:
 
     def calcmaxduration(self, ordinalnum=0) -> "Samplegroup":
         max_durations = [
-            ind.letharguslist[0].end - ind.letharguslist[0].start + 1
+            ind.letharguslist[ordinalnum].end - ind.letharguslist[ordinalnum].start + 1
             for ind in self.fullindlist
             if ind.has_valid_lethargus and len(ind.letharguslist) > ordinalnum
         ]
@@ -211,20 +209,27 @@ class Samplegroup:
             # the data is not consistent
             raise IndividualIntervalNotConsistent()
 
+        valid_foq_and_lts = [
+            (ind.foq, ind.letharguslist[ordinalnum])
+            for ind in self.fullindlist
+            if ind.has_valid_lethargus
+            and len(ind.letharguslist) > ordinalnum
+            and ind in self.indlist
+        ]
+
+        max_lt_hr = max(lt.fq_duration for (_, lt) in valid_foq_and_lts)
+        flip = align == "tail"
         ltfoqmatrix = pd.concat(
             [
-                (
-                    ind.letharguslist[ordinalnum].crop_and_pad_foq(
-                        ind.foq,
-                        padding=padding,
-                        mode="both",
-                        flip=(align == "tail"),
-                    )
+                lt.crop_and_pad_foq(
+                    foq=foq,
+                    padding=(
+                        padding + (max_lt_hr - lt.fq_duration) * float(flip),
+                        padding + (max_lt_hr - lt.fq_duration) * (1.0 - float(flip)),
+                    ),
+                    flip=flip,
                 )
-                for ind in self.fullindlist
-                if ind.has_valid_lethargus
-                and len(ind.letharguslist) > ordinalnum
-                and ind in self.indlist
+                for foq, lt in valid_foq_and_lts
             ],
             axis=1,
         ).values.T
