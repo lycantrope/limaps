@@ -585,7 +585,7 @@ interval between frame (sec): {self.interval}
             ymin, ymax = ylim
         # padding the margin with 5%
         y_margin = (ymax - ymin) * 0.05
-        figsize = figsize or (0.65 * len(groupname), 4)
+        figsize = figsize or (0.65 * len(groupname) + 0.4, 4)
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(1, 1, 1)
         ax.spines["right"].set_visible(False)
@@ -651,6 +651,7 @@ mode            : {self.mode}
         p.text = info
         p.font.bold = True
         p.font.size = Pt(8)
+        p.font.name = "Arial"
 
         param = f"""File information:          
 filename: {self.datapath.name}
@@ -669,6 +670,7 @@ frame interval (sec): {self.interval}
         p.text = param
         p.font.bold = True
         p.font.size = Pt(8)
+        p.font.name = "Arial"
 
         # Add image
         top = 2.75
