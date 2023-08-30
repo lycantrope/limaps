@@ -48,9 +48,6 @@ class Individual:
         self.fq_exitcandidates = None
         self.fq_oescreendmatrix: List[Lethargus] = []
 
-        # 20180226 lethargusdetector implemented
-        self.letharguslist = None
-
         # area rate depend lethargus
         self.normalized_area = self.calc_normalize_area()
         self.area_rate = self.calc_area_rate()  # 20 min running median
@@ -475,7 +472,7 @@ class Individual:
         self.__dict__["rawdata"] = self.__dict__["rawdata"].astype("f8")
         self.__dict__["raw_df"] = pd.DataFrame()
         self.__post_init__()
-        self.__dict__["letharguslist"] = letharguslist
+        self.__dict__["letharguslist"] = letharguslist or []
         if self.rawdata.sum() == 0:
             logger.warning(f"{self.label_str} contains a empty rawdata")
 
@@ -503,9 +500,7 @@ class Individual:
                 data=self.rawdata.fillna(0).values.astype("u2"),
                 compression="gzip",
             )
-            number_of_lethargus = (
-                0 if self.letharguslist is None else len(self.letharguslist)
-            )
+            number_of_lethargus = len(self.letharguslist)
 
             dset.attrs["header"] = json.dumps(
                 dict(
@@ -536,18 +531,20 @@ class Individual:
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
-        if not filepath.exists():
-            raise FileNotFoundError(filepath)
+        letharguslist = []
+        try:
+            with h5py.File(filepath, "r") as file:
+                rawdata = file["rawdata"][()]
+                header = json.loads(file["rawdata"].attrs["header"])
+                if header["number_of_lethargus"] > 0 and "lethargus" in file.keys():
+                    letharguslist = [
+                        Lethargus.from_numpy_arr(*a) for a in file["lethargus"][()]
+                    ]
+        except IOError as e:
+            raise IOError(
+                f"{filepath.name} is not a hdf file or fail to read the data: {e}"
+            )
 
-        if not filepath.name.lower().endswith((".h5", ".hdf")):
-            raise TypeError(f"{filepath.name} is not a hdf file (.h5, .hdf)")
-
-        lethargus_arr = np.empty(shape=0, dtype=LETHARGUS_DTYPES)
-        with h5py.File(filepath, "r") as file:
-            rawdata = file["rawdata"][()]
-            header = json.loads(file["rawdata"].attrs["header"])
-            if header["number_of_lethargus"] > 0 and "lethargus" in file.keys():
-                lethargus_arr = file["lethargus"][()]
         if rawdata.sum() == 0:
             logger.warning(f"{filepath.name} contains a empty rawdata")
 
