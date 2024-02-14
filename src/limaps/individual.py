@@ -558,6 +558,6 @@ class Individual:
             rawdata=pd.Series(rawdata.astype("f8")),
         )
 
-        ind.letharguslist = [Lethargus.from_numpy_arr(*a) for a in lethargus_arr]
+        ind.letharguslist = letharguslist
 
         return ind
