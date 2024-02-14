@@ -100,7 +100,7 @@ class Individual:
             windowsize (int, optional): the size of rolling window (sec). Defaults to 600 sec.
 
         Returns:
-            pd.Series: 10-min rolling mean (np.float16) dropping the nan
+            pd.Series: 10-min rolling mean (float64) dropping the nan
         """
         return (
             self.calc_qa(data)
@@ -108,7 +108,7 @@ class Individual:
             .mean()
             .dropna()
             .reset_index(drop=True)
-        ).astype(np.float16)
+        ).astype("f8")
 
     #################################################################
     # area normalized with max area. not curmax
@@ -135,7 +135,7 @@ class Individual:
             .median()
             .fillna(method="bfill")
             .cummax()
-            .astype(np.float)
+            .astype("f8")
         )
 
     def calc_normalize_area(self) -> pd.Series:
@@ -342,7 +342,7 @@ class Individual:
         with open(filepath, "w") as file:
             file.write(f"{self.label_str}_{self.interval}\n")
             file.write(fq_period_str)
-            self.foq.dropna().astype(np.float16).to_csv(
+            self.foq.dropna().astype("f2").to_csv(
                 file,
                 mode="a",
                 header=False,
@@ -357,7 +357,7 @@ class Individual:
         # The quiescence exit time was defined as the time point
         # after which the fractional quiescence had reached < 0.1. (actually 0.05)
         self.fq_qbooleanvec = self.foq > foq_threshold
-        qbooleandiff = self.fq_qbooleanvec.astype(int).diff()
+        qbooleandiff = self.fq_qbooleanvec.astype("i1").diff()
         self.fq_onsetcandidates = np.where(qbooleandiff == 1)[0]
         self.fq_exitcandidates = np.where(qbooleandiff == -1)[0]
         return self
@@ -450,7 +450,7 @@ class Individual:
 
     def screen_by_activity(self, act_threshold: float = 0.75) -> "Individual":
         self.ar_qbooleanvec = self.area_rate < act_threshold
-        arbooleandiff = self.ar_qbooleanvec.astype(int).diff()
+        arbooleandiff = self.ar_qbooleanvec.astype("i1").diff()
         self.ar_onsetcandidates = np.where(arbooleandiff == 1)[0]
         self.ar_exitcandidates = np.where(arbooleandiff == -1)[0]
         return self
@@ -469,7 +469,7 @@ class Individual:
     def __setstate__(self, kws: Dict[str, Any]) -> None:
         letharguslist = kws.get("letharguslist")
         self.__dict__.update(kws)
-        self.__dict__["rawdata"] = self.__dict__["rawdata"].astype("f8")
+        self.__dict__["rawdata"] = self.__dict__["rawdata"].astype("u2")
         self.__dict__["raw_df"] = pd.DataFrame()
         self.__post_init__()
         self.__dict__["letharguslist"] = letharguslist or []

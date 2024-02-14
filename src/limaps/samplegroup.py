@@ -311,7 +311,7 @@ class Samplegroup:
         ax.spines["right"].set_visible(False)
         ax.spines["top"].set_visible(False)
         interval = self.fullindlist[0].interval
-        hrtick = np.arange(matrix.shape[1] * interval / 60 / 60).astype(int)
+        hrtick = np.arange(matrix.shape[1] * interval / 60 / 60, dtype="i8")
         ax.set_xticks(hrtick * 60 * 60 / interval)
         ax.set_xticklabels(hrtick - 1)
         if not alignhead:
@@ -458,7 +458,7 @@ class Samplegroup:
             ax.spines["right"].set_visible(False)
             ax.spines["top"].set_visible(False)
             # hrtick = np.arange(len(ind.rawdata)*ind.interval/60/60).astype(int)
-            hrtick = np.arange(_xlim[1] * ind.interval / 60 / 60, dtype=int)
+            hrtick = np.arange(_xlim[1] * ind.interval / 60 / 60, dtype="i8")
             ax.set_xticks(hrtick * 60 * 60 / ind.interval)
             ax.set_xticklabels([])
             if labeloff:
@@ -725,7 +725,7 @@ class Samplegroup:
         ax.set_ylim(-0.5, sample_num - 0.5)
         yticks = np.linspace(0, sample_num - 1, sample_num // 5 + 1)
         ax.set_yticks(yticks - 0.5)
-        yticslabels = yticks.astype(int) + 1
+        yticslabels = yticks.astype("i8") + 1
         ax.set_yticklabels(yticslabels)
 
         ax.spines["top"].set_visible(False)
