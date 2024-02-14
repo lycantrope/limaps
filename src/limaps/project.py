@@ -429,7 +429,7 @@ interval between frame (sec): {self.interval}
 
             ax.set_ylim(0, 1.1)
             # ax.set_xlim(0, 5*60*60/interval)
-            hrtick = np.arange(len(ind.foq) * ind.interval / 60 / 60).astype(int)
+            hrtick = np.arange(len(ind.foq) * ind.interval / 60 / 60, dtype="i8")
             ax.set_xticks(hrtick * 60 * 60 / ind.interval)
             if xlim is not None and len(xlim) == 2:
                 ax.set_xlim(xlim)

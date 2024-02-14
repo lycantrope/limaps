@@ -50,7 +50,7 @@ class LethargusDetector:
         ax2 = ax.twiny()
         ax2.xaxis.tick_top()
         # originalxtick = ax.get_xticklabels()
-        hrtick = np.arange(xlim[1] * self.ind.interval / 60 / 60).astype(int)
+        hrtick = np.arange(xlim[1] * self.ind.interval / 60 / 60, dtype="i8")
         ax.set_xticks(hrtick * 60 * 60 / self.ind.interval)
         ax.set_xticklabels([])
         if labeloff:

@@ -94,7 +94,7 @@ class Lethargus:
             return self
 
         # calc q and a bout duration
-        qabooleandiff = qaboolean.astype(int).diff()
+        qabooleandiff = qaboolean.astype("i1").diff()
         qstart = np.where(qabooleandiff == 1)[0]
         qend = np.where(qabooleandiff == -1)[0]
         if not len(qstart) or not len(qend):

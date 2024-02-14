@@ -133,7 +133,7 @@ class Individual:
         return (
             self.rawdata.rolling(window=windowsize, center=False)
             .median()
-            .fillna(method="bfill")
+            .bfill()
             .cummax()
             .astype("f8")
         )
@@ -477,13 +477,15 @@ class Individual:
             logger.warning(f"{self.label_str} contains a empty rawdata")
 
     def __getstate__(self) -> Dict[str, Any]:
+        rawdata = self.rawdata.copy()
+        rawdata[rawdata.isna()] = 0
         return dict(
             date=self.date,
             groupname=self.groupname,
             expnum=self.expnum,
             interval=self.interval,
             samplenum=self.samplenum,
-            rawdata=self.rawdata.fillna(0).astype("u2"),
+            rawdata=rawdata.astype("u2"),
             letharguslist=self.letharguslist,
         )
 
@@ -494,10 +496,12 @@ class Individual:
         if not filepath.name.endswith(".h5"):
             filepath = filepath.with_suffix(".h5")
 
+        rawdata = self.rawdata.copy()
+        rawdata[rawdata.isna()] = 0
         with h5py.File(filepath, "w") as file:
             dset = file.create_dataset(
                 "rawdata",
-                data=self.rawdata.fillna(0).values.astype("u2"),
+                data=rawdata.values.astype("u2"),
                 compression="gzip",
             )
             number_of_lethargus = len(self.letharguslist)
